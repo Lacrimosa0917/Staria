@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动器背景色：取自图标底色 #FCFBF9 -->
+    <color name="ic_launcher_background">#FCFBF9</color>
+</resources>
