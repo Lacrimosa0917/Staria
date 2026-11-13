@@ -71,9 +71,10 @@ enum class CreateKind(val labelRes: Int, val icon: ImageVector) {
 
 private val Hairline = Color(0xFFE6E2DA)
 
+/** 底栏高度。新建按钮直径与之相等，两者底边对齐后高度完全一致。 */
 private val CapsuleHeight = 58.dp
 private val CapsuleHPad = 5.dp
-private val CreateButtonSize = 54.dp
+private val CreateButtonSize = CapsuleHeight
 private val BarGap = 12.dp
 
 /**
