@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.lacrimosa.stario.ui.home.HomeScreen
+import com.lacrimosa.stario.ui.StarioApp
 import com.lacrimosa.stario.ui.theme.StarioTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             StarioTheme {
-                HomeScreen()
+                StarioApp()
             }
         }
     }

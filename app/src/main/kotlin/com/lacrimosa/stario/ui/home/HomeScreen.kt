@@ -2,8 +2,6 @@ package com.lacrimosa.stario.ui.home
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,15 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -34,10 +27,7 @@ import com.lacrimosa.stario.R
 import com.lacrimosa.stario.data.MAX_STACKED_NOTES
 import com.lacrimosa.stario.data.PaperNote
 import com.lacrimosa.stario.data.SampleData
-import com.lacrimosa.stario.ui.component.CreateKind
 import com.lacrimosa.stario.ui.component.PaperCardStack
-import com.lacrimosa.stario.ui.component.StarioBottomBar
-import com.lacrimosa.stario.ui.component.StarioTab
 import com.lacrimosa.stario.ui.theme.CardPaper
 import com.lacrimosa.stario.ui.theme.Ink
 import com.lacrimosa.stario.ui.theme.KebenSong
@@ -46,106 +36,70 @@ import com.lacrimosa.stario.ui.theme.PaperWhite
 /**
  * 首页：极简留白布局。
  *
- * 纵向四段：
- * 1. 顶部左上——圆形头像按钮（昵称首字符）
+ * 纵向三段：
+ * 1. 顶部左上——圆形头像按钮（昵称首字符），点击唤起个人主页
  * 2. 中部偏上——刻本宋体大字号 slogan「星笺」
  * 3. 中部偏下——纸条卡片堆叠
- * 4. 底部——胶囊页面底栏 + 圆形新建按钮
+ *
+ * 底部胶囊底栏由根布局 [com.lacrimosa.stario.ui.StarioApp] 提供，
+ * 这样切到其它页面时底栏不会消失。
  */
 @Composable
 fun HomeScreen(
     nickname: String = SampleData.NICKNAME,
     notes: List<PaperNote> = SampleData.notes,
     onAvatarClick: () -> Unit = {},
-    onCreate: (CreateKind) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
-    var currentTab by remember { mutableStateOf(StarioTab.Home) }
-    var navExpanded by remember { mutableStateOf(false) }
-    var createExpanded by remember { mutableStateOf(false) }
-
-    Box(
-        modifier = Modifier
+    Column(
+        modifier = modifier
             .fillMaxSize()
-            .background(PaperWhite)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {
-                // 点空白处收起展开项
-                if (navExpanded || createExpanded) {
-                    navExpanded = false
-                    createExpanded = false
-                }
-            },
+            .background(PaperWhite),
     ) {
-        Column(
+        // ---------- 顶部：头像 ----------
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding(),
+                .fillMaxWidth()
+                .padding(start = 20.dp, top = 14.dp),
         ) {
-            // ---------- 顶部：头像 ----------
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, top = 14.dp),
+            AvatarButton(nickname = nickname, onClick = onAvatarClick)
+        }
+
+        // ---------- 中部：slogan + 卡片堆叠 ----------
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+        ) {
+            val topGap = maxHeight * 0.12f
+
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                AvatarButton(nickname = nickname, onClick = onAvatarClick)
+                Spacer(Modifier.height(topGap))
+
+                Text(
+                    text = stringResource(R.string.slogan),
+                    fontFamily = KebenSong,
+                    fontSize = 46.sp,
+                    lineHeight = 60.sp,
+                    color = Ink,
+                    textAlign = TextAlign.Center,
+                    letterSpacing = 10.sp,
+                )
+
+                Spacer(Modifier.height(30.dp))
+
+                PaperCardStack(
+                    notes = notes.take(MAX_STACKED_NOTES),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                )
+
+                Spacer(Modifier.height(8.dp))
             }
-
-            // ---------- 中部：slogan + 卡片堆叠 ----------
-            // 用 Column + weight 分配剩余高度：slogan 固定在中部偏上，
-            // 卡片堆叠吃掉余下空间并自适应高度
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-            ) {
-                val topGap = maxHeight * 0.12f
-
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Spacer(Modifier.height(topGap))
-
-                    Text(
-                        text = stringResource(R.string.slogan),
-                        fontFamily = KebenSong,
-                        fontSize = 46.sp,
-                        lineHeight = 60.sp,
-                        color = Ink,
-                        textAlign = TextAlign.Center,
-                        letterSpacing = 10.sp,
-                    )
-
-                    Spacer(Modifier.height(30.dp))
-
-                    PaperCardStack(
-                        notes = notes.take(MAX_STACKED_NOTES),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-
-            // ---------- 底部：底栏 + 新建 ----------
-            StarioBottomBar(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
-                current = currentTab,
-                onSelect = { currentTab = it },
-                onCreate = onCreate,
-                navExpanded = navExpanded,
-                onNavExpandedChange = { navExpanded = it },
-                createExpanded = createExpanded,
-                onCreateExpandedChange = { createExpanded = it },
-            )
-
-            Spacer(Modifier.height(4.dp))
         }
     }
 }
@@ -160,11 +114,11 @@ private fun AvatarButton(
         shape = CircleShape,
         color = CardPaper,
         border = BorderStroke(1.dp, Color(0xFFE6E2DA)),
-        shadowElevation = 2.dp,
         onClick = onClick,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
+                // 昵称可能以英文开头，取首个码点避免切坏表情/代理对
                 text = nickname.take(1),
                 color = Ink,
                 fontSize = 17.sp,

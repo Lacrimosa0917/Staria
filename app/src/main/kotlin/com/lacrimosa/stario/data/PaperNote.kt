@@ -19,6 +19,7 @@ object SampleData {
     /** 当前用户昵称，头像取首字符。 */
     const val NICKNAME: String = "沈星回"
 
+
     val notes: List<PaperNote> = listOf(
         PaperNote(
             id = 1,
@@ -50,5 +51,12 @@ object SampleData {
             text = "席地而坐，看一整夜的星星。",
             source = "随笔",
         ),
+    )
+
+    /** 个人主页展示的记录数量。接库后由仓储层提供，UI 无需改动。 */
+    val counts: RecordCounts = RecordCounts(
+        diary = 128,
+        paper = notes.size,
+        essay = 43,
     )
 }

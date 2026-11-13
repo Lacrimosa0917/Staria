@@ -187,3 +187,26 @@ val IconEssay: ImageVector by lazy {
         lineTo(18f, 9.4f)
     }
 }
+
+/** 小铅笔：昵称可编辑的提示。 */
+val IconPencilSmall: ImageVector by lazy {
+    build("PencilSmall") {
+        moveTo(5.2f, 18.8f)
+        lineTo(5.2f, 15.6f)
+        lineTo(15.8f, 5f)
+        lineTo(19f, 8.2f)
+        lineTo(8.4f, 18.8f)
+        close()
+        moveTo(14f, 6.8f)
+        lineTo(17.2f, 10f)
+    }
+}
+
+/** 右尖括号：列表项进入提示。 */
+val IconChevronRight: ImageVector by lazy {
+    build("ChevronRight") {
+        moveTo(9.5f, 5.5f)
+        lineTo(16f, 12f)
+        lineTo(9.5f, 18.5f)
+    }
+}
