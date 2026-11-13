@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lacrimosa.staria.data.DiaryEntry
+import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.SampleData
@@ -53,6 +54,8 @@ import com.lacrimosa.staria.ui.profile.NicknameDialog
 import com.lacrimosa.staria.ui.profile.ProfileDrawer
 import com.lacrimosa.staria.ui.selection.SelectionState
 import com.lacrimosa.staria.ui.theme.PaperWhite
+import com.lacrimosa.staria.ui.think.EssayReaderPage
+import com.lacrimosa.staria.ui.think.ThinkScreen
 import com.lacrimosa.staria.ui.time.TimeScreen
 
 /**
@@ -81,10 +84,15 @@ fun StariaApp() {
     // 纸条展开浮层：放在根布局渲染，才能压暗并覆盖顶栏与底栏
     var expandedNote by remember { mutableStateOf<PaperNote?>(null) }
 
+    // 随笔查看页（二级全屏页面）。非空时整页覆盖，底栏与头像不出现
+    var readerEssay by remember { mutableStateOf<Essay?>(null) }
+
     // 日记数据：删除后从列表移除（时间页不再展示）
     var diaryEntries by remember { mutableStateOf(SampleData.diaryEntries) }
     // 纸条数据：首页卡片堆叠与纸条页共用
     var paperNotes by remember { mutableStateOf(SampleData.notes) }
+    // 随笔数据：思索页
+    var essays by remember { mutableStateOf(SampleData.essays) }
 
     // 多选状态。放在根布局是因为：
     // - 红色删除按钮要顶替新建按钮、与之同位置，只能由底栏渲染
@@ -98,9 +106,10 @@ fun StariaApp() {
         selection.setOverlay(false)
     }
 
-    // 系统返回键的优先级：先关展开卡片，再退多选，都没有才交给系统
-    BackHandler(enabled = expandedNote != null || selection.isActive) {
+    // 系统返回键的优先级：关闭随笔查看页 → 关展开卡片 → 退多选 → 交给系统
+    BackHandler(enabled = readerEssay != null || expandedNote != null || selection.isActive) {
         when {
+            readerEssay != null -> readerEssay = null
             expandedNote != null -> {
                 expandedNote = null
                 selection.setOverlay(false)
@@ -123,6 +132,9 @@ fun StariaApp() {
             }
             StariaTab.Paper -> {
                 paperNotes = paperNotes.filterNot { it.id in ids }
+            }
+            StariaTab.Think -> {
+                essays = essays.filterNot { it.id in ids }
             }
             else -> Unit
         }
@@ -199,7 +211,15 @@ fun StariaApp() {
                             },
                         )
 
-                        StariaTab.Think -> PlaceholderScreen(StariaTab.Think)
+                        StariaTab.Think -> ThinkScreen(
+                            essays = essays,
+                            selection = selection,
+                            onUserInteract = collapseBar,
+                            onDelete = { essay: Essay ->
+                                essays = essays.filterNot { it.id == essay.id }
+                            },
+                            onOpen = { essay -> readerEssay = essay },
+                        )
                     }
                 }
             }
@@ -261,6 +281,20 @@ fun StariaApp() {
                 onDismiss = {
                     expandedNote = null
                     selection.setOverlay(false)
+                },
+            )
+        }
+
+        // ---------- 随笔查看页（二级全屏） ----------
+        // 覆盖在最上层，底栏与头像被完全遮住
+        readerEssay?.let { essay ->
+            EssayReaderPage(
+                essay = essay,
+                onBack = { readerEssay = null },
+                onEdit = { /* 编辑页后续接入 */ },
+                onDelete = {
+                    essays = essays.filterNot { it.id == essay.id }
+                    readerEssay = null
                 },
             )
         }

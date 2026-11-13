@@ -263,3 +263,32 @@ val IconChecklist: ImageVector by lazy {
         lineTo(15.4f, 17.6f)
     }
 }
+
+/**
+ * 更多：三个圆点。
+ *
+ * 用线段无法得到圆点（描边线宽只有 1.6），所以这里直接画三条极短的
+ * 圆头线段，并给该图标单独放大描边宽度，视觉上就是三个实心点。
+ */
+val IconMore: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "More",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        listOf(6f, 12f, 18f).forEach { cx ->
+            path(
+                fill = null,
+                stroke = SolidColor(Color(INK)),
+                strokeLineWidth = 2.4f,
+                strokeLineCap = StrokeCap.Round,
+                pathBuilder = {
+                    moveTo(cx, 12f)
+                    lineTo(cx + 0.1f, 12f)
+                },
+            )
+        }
+    }.build()
+}

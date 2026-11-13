@@ -56,22 +56,41 @@ data class TooltipAction(
 )
 
 /**
+ * 弹窗相对锚点的展开方向。
+ *
+ * 每一项表示「锚点落在弹窗的哪个角」：
+ * - [AnchorCorner.BottomLeft]：锚点在弹窗左下 → 弹窗向右上展开
+ * - [AnchorCorner.BottomRight]：锚点在弹窗右下 → 弹窗向左上展开
+ * 等。
+ */
+enum class AnchorCorner {
+    BottomLeft,
+    BottomRight,
+    TopLeft,
+    TopRight,
+}
+
+/**
  * 长按唤起的操作 tooltip。
  *
- * 时间页的日记标题与纸条页的卡片共用同一个组件，保证两处手感与外观一致。
+ * 时间页、纸条页、思索页共用同一个组件，保证各处手感与外观一致。
  *
- * 位置策略（[anchor] 是长按点在窗口坐标系里的位置）：
- * 1. 默认让长按点落在弹窗的**左下角**（弹窗向右上展开）
+ * 位置策略（[anchor] 是锚点在窗口坐标系里的位置）：
+ * 1. 默认让锚点落在弹窗的**左下角**（弹窗向右上展开）
  * 2. 该位置放不下时依次尝试：右下角 → 左上角 → 右上角
  * 3. 四个角都放不下，就夹进屏幕内
  *
- * 用 `Popup` 而不是 `Dialog`：Dialog 固定居中且自带遮罩，无法贴住长按点。
+ * [preferredCorner] 可指定首选角。例如右上角的「更多」按钮希望菜单
+ * 向左下展开（锚点落在弹窗右上角），这样菜单不会盖住按钮本身。
+ *
+ * 用 `Popup` 而不是 `Dialog`：Dialog 固定居中且自带遮罩，无法贴住锚点。
  */
 @Composable
 fun ActionTooltip(
     actions: List<TooltipAction>,
     anchor: Offset,
     onDismiss: () -> Unit,
+    preferredCorner: AnchorCorner = AnchorCorner.BottomLeft,
 ) {
     if (actions.isEmpty()) return
 
@@ -93,13 +112,24 @@ fun ActionTooltip(
             }
             val m = with(density) { TooltipMargin.toPx() }
 
-            // 四个候选角：长按点分别作为弹窗的 左下 / 右下 / 左上 / 右上
-            val candidates = listOf(
-                Offset(anchor.x + m, anchor.y - h - m),
-                Offset(anchor.x - w - m, anchor.y - h - m),
-                Offset(anchor.x + m, anchor.y + m),
-                Offset(anchor.x - w - m, anchor.y + m),
-            )
+            // 各角对应的弹窗左上角坐标
+            fun posFor(corner: AnchorCorner): Offset = when (corner) {
+                // 锚点位于弹窗左下角 → 弹窗在锚点右上方
+                AnchorCorner.BottomLeft -> Offset(anchor.x + m, anchor.y - h - m)
+                // 锚点位于弹窗右下角 → 弹窗在锚点左上方
+                AnchorCorner.BottomRight -> Offset(anchor.x - w - m, anchor.y - h - m)
+                // 锚点位于弹窗左上角 → 弹窗在锚点右下方
+                AnchorCorner.TopLeft -> Offset(anchor.x + m, anchor.y + m)
+                // 锚点位于弹窗右上角 → 弹窗在锚点左下方
+                AnchorCorner.TopRight -> Offset(anchor.x - w - m, anchor.y + m)
+            }
+
+            // 首选角排在最前，其后是其余三个，作为放不下时的备选
+            val order = buildList {
+                add(preferredCorner)
+                AnchorCorner.entries.filterNot { it == preferredCorner }.forEach { add(it) }
+            }
+            val candidates = order.map(::posFor)
 
             val fits = candidates.firstOrNull { p ->
                 p.x >= 0f && p.y >= 0f && p.x + w <= screenW && p.y + h <= screenH
