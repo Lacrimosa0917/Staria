@@ -243,3 +243,23 @@ val IconTrash: ImageVector by lazy {
         lineTo(13.4f, 16.2f)
     }
 }
+
+/** 多选：清单 + 勾。 */
+val IconChecklist: ImageVector by lazy {
+    build("Checklist") {
+        // 三个待选框
+        moveTo(4.2f, 6.4f)
+        lineTo(6f, 6.4f)
+        moveTo(4.2f, 12f)
+        lineTo(6f, 12f)
+        moveTo(4.2f, 17.6f)
+        lineTo(6f, 17.6f)
+        // 对应的横线
+        moveTo(9.4f, 6.4f)
+        lineTo(19.4f, 6.4f)
+        moveTo(9.4f, 12f)
+        lineTo(19.4f, 12f)
+        moveTo(9.4f, 17.6f)
+        lineTo(15.4f, 17.6f)
+    }
+}

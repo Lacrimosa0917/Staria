@@ -124,11 +124,20 @@ fun StarioBottomBar(
     createExpanded: Boolean,
     onCreateExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * 是否显示新建按钮。
+     *
+     * 多选模式下页面会用红色删除按钮占据右下角，此时应隐藏新建按钮，
+     * 否则两个圆形按钮会叠在一起。
+     */
+    showCreateButton: Boolean = true,
 ) {
     BoxWithConstraints(modifier = modifier) {
         val tabCount = StarioTab.entries.size
-        // 展开态：吃掉除新建按钮与间距外的全部宽度
-        val expandedWidth = maxWidth - CreateButtonSize - BarGap
+        // 展开态：吃掉除新建按钮与间距外的全部宽度；
+        // 新建按钮隐藏时胶囊可以吃到整个宽度
+        val reserved = if (showCreateButton) CreateButtonSize + BarGap else 0.dp
+        val expandedWidth = maxWidth - reserved
         val cellWidth = (expandedWidth - CapsuleHPad * 2) / tabCount.toFloat()
         // 收起态：恰好等于一个格子，保证首个按键位置不变
         val collapsedWidth = cellWidth + CapsuleHPad * 2
@@ -144,12 +153,14 @@ fun StarioBottomBar(
             onSelect = onSelect,
         )
 
-        CreateButton(
-            modifier = Modifier.align(Alignment.BottomEnd),
-            expanded = createExpanded,
-            onExpandedChange = onCreateExpandedChange,
-            onCreate = onCreate,
-        )
+        if (showCreateButton) {
+            CreateButton(
+                modifier = Modifier.align(Alignment.BottomEnd),
+                expanded = createExpanded,
+                onExpandedChange = onCreateExpandedChange,
+                onCreate = onCreate,
+            )
+        }
     }
 }
 

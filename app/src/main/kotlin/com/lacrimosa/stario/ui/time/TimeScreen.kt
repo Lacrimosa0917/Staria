@@ -2,6 +2,7 @@ package com.lacrimosa.stario.ui.time
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextAlign
@@ -37,7 +42,14 @@ import androidx.compose.ui.unit.sp
 import com.lacrimosa.stario.data.DiaryEntry
 import com.lacrimosa.stario.data.DiaryGroup
 import com.lacrimosa.stario.data.SampleData
+import com.lacrimosa.stario.ui.component.ActionTooltip
+import com.lacrimosa.stario.ui.component.BarSidePadding
+import com.lacrimosa.stario.ui.component.DestructiveRed
+import com.lacrimosa.stario.ui.component.TooltipAction
 import com.lacrimosa.stario.ui.component.navFirstItemLeftX
+import com.lacrimosa.stario.ui.icon.IconChecklist
+import com.lacrimosa.stario.ui.icon.IconPencilSmall
+import com.lacrimosa.stario.ui.icon.IconTrash
 import com.lacrimosa.stario.ui.theme.Ink
 import com.lacrimosa.stario.ui.theme.InkMuted
 import com.lacrimosa.stario.ui.theme.PaperWhite
@@ -93,6 +105,8 @@ fun TimeScreen(
     onUserInteract: () -> Unit = {},
     onEdit: (DiaryEntry) -> Unit = {},
     onDelete: (DiaryEntry) -> Unit = {},
+    /** 多选状态变化时通知外部，用于让底栏隐藏新建按钮。 */
+    onSelectionModeChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val groups = remember(entries) {
@@ -108,6 +122,33 @@ fun TimeScreen(
     var pendingDelete by remember { mutableStateOf<DiaryEntry?>(null) }
     var skipDeleteConfirm by remember { mutableStateOf(false) }
     var dontAskAgain by remember { mutableStateOf(false) }
+
+    // 长按唤起的 tooltip（与纸条页共用 ActionTooltip）
+    var tooltipEntry by remember { mutableStateOf<DiaryEntry?>(null) }
+    // 长按点在窗口里的位置，tooltip 据此决定贴哪个角
+    var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
+
+    // 多选
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedIds = remember { mutableStateListOf<Long>() }
+
+    val exitSelection = {
+        selectionMode = false
+        selectedIds.clear()
+    }
+
+    // 多选开关同步给外部（底栏据此隐藏新建按钮）
+    LaunchedEffect(selectionMode) {
+        onSelectionModeChange(selectionMode)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onSelectionModeChange(false) }
+    }
+
+    // id -> 条目，供批量删除时取回对象
+    val diaryLookup: Map<Long, DiaryEntry> = remember(entries) {
+        entries.associateBy { it.id }
+    }
 
     // 没有日记：不画时间轴，只留居中 slogan
     if (groups.isEmpty()) {
@@ -184,8 +225,15 @@ fun TimeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(scrollState)
+                        // 只观察按下事件用于收起底栏，不消费，
+                        // 否则会与标题的长按手势竞争
                         .pointerInput(Unit) {
-                            detectTapGestures(onPress = { onUserInteract() })
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.type == PointerEventType.Press) onUserInteract()
+                                }
+                            }
                         },
                 ) {
                     Spacer(Modifier.height(ContentTopPad))
@@ -204,27 +252,31 @@ fun TimeScreen(
                                 group = group,
                                 axisX = axisX,
                                 axisColumnWidth = dateColumnWidth,
-                                expandedId = expandedId,
-                                onExpand = { id ->
+                                expandedId = if (selectionMode) null else expandedId,
+                                selectionMode = selectionMode,
+                                selectedIds = selectedIds,
+                                onClickTitle = { entry ->
                                     onUserInteract()
-                                    expandedId = if (expandedId == id) null else id
+                                    if (selectionMode) {
+                                        // 多选：点击即切换选中
+                                        if (selectedIds.contains(entry.id)) {
+                                            selectedIds.remove(entry.id)
+                                            if (selectedIds.isEmpty()) selectionMode = false
+                                        } else {
+                                            selectedIds.add(entry.id)
+                                        }
+                                    } else {
+                                        expandedId = if (expandedId == entry.id) null else entry.id
+                                    }
+                                },
+                                onLongPressTitle = { entry, pos ->
+                                    onUserInteract()
+                                    tooltipAnchor = pos
+                                    tooltipEntry = entry
                                 },
                                 onLongPressDate = {
                                     onUserInteract()
                                     showCalendar = true
-                                },
-                                onEdit = { entry ->
-                                    onUserInteract()
-                                    onEdit(entry)
-                                },
-                                onDeleteRequest = { entry ->
-                                    onUserInteract()
-                                    if (skipDeleteConfirm) {
-                                        onDelete(entry)
-                                    } else {
-                                        dontAskAgain = false
-                                        pendingDelete = entry
-                                    }
                                 },
                             )
                         }
@@ -261,6 +313,66 @@ fun TimeScreen(
                 },
             )
         }
+
+        // ---- 长按标题唤起的 tooltip ----
+        tooltipEntry?.let { entry ->
+            ActionTooltip(
+                anchor = tooltipAnchor,
+                actions = listOf(
+                    TooltipAction(
+                        label = "编辑",
+                        icon = IconPencilSmall,
+                        onClick = {
+                            tooltipEntry = null
+                            onEdit(entry)
+                        },
+                    ),
+                    TooltipAction(
+                        label = "删除",
+                        icon = IconTrash,
+                        destructive = true,
+                        onClick = {
+                            tooltipEntry = null
+                            if (skipDeleteConfirm) {
+                                onDelete(entry)
+                            } else {
+                                dontAskAgain = false
+                                pendingDelete = entry
+                            }
+                        },
+                    ),
+                    TooltipAction(
+                        label = "多选",
+                        icon = IconChecklist,
+                        onClick = {
+                            tooltipEntry = null
+                            expandedId = null
+                            selectionMode = true
+                            selectedIds.clear()
+                            selectedIds.add(entry.id)
+                        },
+                    ),
+                ),
+                onDismiss = { tooltipEntry = null },
+            )
+        }
+
+        // ---- 多选删除按钮：右下角，替代新建按钮的位置 ----
+        if (selectionMode) {
+            BatchDeleteButton(
+                count = selectedIds.size,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = BarSidePadding, bottom = 18.dp),
+                onClick = {
+                    val ids = selectedIds.toList()
+                    ids.forEach { id ->
+                        diaryLookup[id]?.let(onDelete)
+                    }
+                    exitSelection()
+                },
+            )
+        }
     }
 }
 
@@ -275,10 +387,11 @@ private fun TimelineGroup(
     axisX: androidx.compose.ui.unit.Dp,
     axisColumnWidth: androidx.compose.ui.unit.Dp,
     expandedId: Long?,
-    onExpand: (Long) -> Unit,
+    selectionMode: Boolean,
+    selectedIds: List<Long>,
+    onClickTitle: (DiaryEntry) -> Unit,
+    onLongPressTitle: (DiaryEntry, Offset) -> Unit,
     onLongPressDate: () -> Unit,
-    onEdit: (DiaryEntry) -> Unit,
-    onDeleteRequest: (DiaryEntry) -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth()) {
         // ---------- 左：圆点 + 日期 ----------
@@ -320,12 +433,43 @@ private fun TimelineGroup(
                 DiaryTitleRow(
                     entry = entry,
                     expanded = entry.id == expandedId,
-                    onClick = { onExpand(entry.id) },
-                    onEdit = { onEdit(entry) },
-                    onDelete = { onDeleteRequest(entry) },
+                    selectionMode = selectionMode,
+                    selected = selectedIds.contains(entry.id),
+                    onClick = { onClickTitle(entry) },
+                    onLongPress = { pos -> onLongPressTitle(entry, pos) },
                 )
             }
             Spacer(Modifier.height(18.dp))
         }
+    }
+}
+
+/**
+ * 多选模式下右下角的批量删除按钮（红色圆形，替代新建按钮的位置）。
+ */
+@Composable
+private fun BatchDeleteButton(
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(58.dp)
+            .background(DestructiveRed, CircleShape)
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+                enabled = count > 0,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = IconTrash,
+            contentDescription = "删除所选",
+            modifier = Modifier.size(22.dp),
+            tint = PaperWhite,
+        )
     }
 }

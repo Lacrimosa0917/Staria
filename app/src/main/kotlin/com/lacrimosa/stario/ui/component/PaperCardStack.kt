@@ -273,14 +273,16 @@ private fun NoteContent(note: PaperNote) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(Modifier.height(10.dp))
-        // 出处贴在正文下方
-        Text(
-            text = "— ${note.source}",
-            color = InkMuted,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // 出处贴在正文下方；未写出处时不展示
+        note.source?.let { source ->
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "— $source",
+                color = InkMuted,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }

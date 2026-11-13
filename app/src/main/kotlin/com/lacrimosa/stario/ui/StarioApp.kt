@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lacrimosa.stario.data.DiaryEntry
 import com.lacrimosa.stario.data.NicknameStore
+import com.lacrimosa.stario.data.PaperNote
 import com.lacrimosa.stario.data.SampleData
 import com.lacrimosa.stario.ui.component.AvatarButton
 import com.lacrimosa.stario.ui.component.BarSidePadding
@@ -32,6 +33,7 @@ import com.lacrimosa.stario.ui.component.StarioBottomBar
 import com.lacrimosa.stario.ui.component.StarioTab
 import com.lacrimosa.stario.ui.home.HomeScreen
 import com.lacrimosa.stario.ui.placeholder.PlaceholderScreen
+import com.lacrimosa.stario.ui.paper.PaperScreen
 import com.lacrimosa.stario.ui.profile.NicknameDialog
 import com.lacrimosa.stario.ui.profile.ProfileDrawer
 import com.lacrimosa.stario.ui.theme.PaperWhite
@@ -62,6 +64,11 @@ fun StarioApp() {
 
     // 日记数据：删除后从列表移除（时间页不再展示）
     var diaryEntries by remember { mutableStateOf(SampleData.diaryEntries) }
+    // 纸条数据：首页卡片堆叠与纸条页共用
+    var paperNotes by remember { mutableStateOf(SampleData.notes) }
+
+    // 多选进行中：底栏隐藏新建按钮，由页面的红色删除按钮接管右下角
+    var selectionActive by remember { mutableStateOf(false) }
 
     val collapseBar = {
         navExpanded = false
@@ -103,7 +110,7 @@ fun StarioApp() {
                 ) { tab ->
                     when (tab) {
                         StarioTab.Home -> HomeScreen(
-                            notes = SampleData.notes,
+                            notes = paperNotes,
                         )
 
                         StarioTab.Time -> TimeScreen(
@@ -113,9 +120,18 @@ fun StarioApp() {
                             onDelete = { entry: DiaryEntry ->
                                 diaryEntries = diaryEntries.filterNot { it.id == entry.id }
                             },
+                            onSelectionModeChange = { selectionActive = it },
                         )
 
-                        StarioTab.Paper -> PlaceholderScreen(StarioTab.Paper)
+                        StarioTab.Paper -> PaperScreen(
+                            notes = paperNotes,
+                            onUserInteract = collapseBar,
+                            onDelete = { note: PaperNote ->
+                                paperNotes = paperNotes.filterNot { it.id == note.id }
+                            },
+                            onSelectionModeChange = { selectionActive = it },
+                        )
+
                         StarioTab.Think -> PlaceholderScreen(StarioTab.Think)
                     }
                 }
@@ -138,6 +154,7 @@ fun StarioApp() {
                     onNavExpandedChange = { navExpanded = it },
                     createExpanded = createExpanded,
                     onCreateExpandedChange = { createExpanded = it },
+                    showCreateButton = !selectionActive,
                 )
                 Spacer(Modifier.height(4.dp))
             }
