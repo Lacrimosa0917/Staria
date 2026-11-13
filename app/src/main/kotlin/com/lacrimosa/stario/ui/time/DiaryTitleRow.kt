@@ -6,9 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,7 +67,6 @@ fun DiaryTitleRow(
     // 本行在窗口里的左上角，用于把手势坐标换算成窗口坐标
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
 
-    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -88,15 +85,16 @@ fun DiaryTitleRow(
                     .onGloballyPositioned { coords ->
                         windowOrigin = coords.positionInWindow()
                     }
-                    // clickable 只负责点击；长按单独处理以获取坐标
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClick,
-                    )
-                    .pointerInput(Unit) {
+                    // 点击与长按必须放在**同一个** detectTapGestures 里：
+                    // 拆成 combinedClickable + pointerInput 时，
+                    // 内层 pointerInput 的 detectTapGestures 会先消费按下事件，
+                    // 外层 combinedClickable 的 onClick 永远收不到。
+                    .pointerInput(selectionMode) {
                         detectTapGestures(
-                            onLongPress = { local -> onLongPress(windowOrigin + local) },
+                            onTap = { onClick() },
+                            onLongPress = { local ->
+                                if (!selectionMode) onLongPress(windowOrigin + local)
+                            },
                         )
                     }
                     .padding(vertical = 9.dp, horizontal = 2.dp),

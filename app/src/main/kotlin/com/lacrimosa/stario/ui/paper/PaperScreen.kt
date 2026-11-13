@@ -3,7 +3,6 @@ package com.lacrimosa.stario.ui.paper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -264,7 +263,6 @@ private fun PaperNoteCard(
     // 卡片在窗口里的左上角，用来把手势坐标换算成窗口坐标
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
 
-    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -275,18 +273,14 @@ private fun PaperNoteCard(
             // 卡片底色略深于纯白背景，但不影响阅读
             .background(CardPaper, RoundedCornerShape(14.dp))
             .border(1.dp, Hairline, RoundedCornerShape(14.dp))
-            // 用 combinedClickable 只承载点击；长按单独用 pointerInput 处理，
-            // 因为 combinedClickable 的 onLongClick 拿不到位置。
-            .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            )
+            // 点击与长按放在同一个 detectTapGestures 里：
+            // 拆成 combinedClickable + pointerInput 时，
+            // 内层 pointerInput 会先消费按下事件，onClick 收不到。
             .pointerInput(selectionMode) {
-                if (selectionMode) return@pointerInput
                 detectTapGestures(
+                    onTap = { onClick() },
                     onLongPress = { local ->
-                        onLongPress(windowOrigin + local)
+                        if (!selectionMode) onLongPress(windowOrigin + local)
                     },
                 )
             }

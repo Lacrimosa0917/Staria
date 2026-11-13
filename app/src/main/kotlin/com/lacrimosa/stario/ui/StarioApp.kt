@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,8 +68,17 @@ fun StarioApp() {
     // 纸条数据：首页卡片堆叠与纸条页共用
     var paperNotes by remember { mutableStateOf(SampleData.notes) }
 
-    // 多选进行中：底栏隐藏新建按钮，由页面的红色删除按钮接管右下角
+    // 多选进行中：底栏隐藏新建按钮，由页面的红色删除按钮接管右下角。
+    // 额外用 tab 兜底：切走后无论页面是否来得及回调，都视为非多选，
+    // 避免回到本页时残留「没有新建按钮」的状态。
     var selectionActive by remember { mutableStateOf(false) }
+    val hideCreateButton = selectionActive &&
+        (currentTab == StarioTab.Time || currentTab == StarioTab.Paper)
+
+    // 切换 tab 时清掉多选标记
+    LaunchedEffect(currentTab) {
+        selectionActive = false
+    }
 
     val collapseBar = {
         navExpanded = false
@@ -108,31 +118,35 @@ fun StarioApp() {
                     animationSpec = tween(durationMillis = 180),
                     label = "tab-content",
                 ) { tab ->
-                    when (tab) {
-                        StarioTab.Home -> HomeScreen(
-                            notes = paperNotes,
-                        )
+                    // key(tab) 让每个页面在切入时是全新状态：
+                    // 否则多选标记、展开的卡片等会跨 tab 残留
+                    androidx.compose.runtime.key(tab) {
+                        when (tab) {
+                            StarioTab.Home -> HomeScreen(
+                                notes = paperNotes,
+                            )
 
-                        StarioTab.Time -> TimeScreen(
-                            entries = diaryEntries,
-                            // README：操作该页时若底栏展开则自动收起
-                            onUserInteract = collapseBar,
-                            onDelete = { entry: DiaryEntry ->
-                                diaryEntries = diaryEntries.filterNot { it.id == entry.id }
-                            },
-                            onSelectionModeChange = { selectionActive = it },
-                        )
+                            StarioTab.Time -> TimeScreen(
+                                entries = diaryEntries,
+                                // README：操作该页时若底栏展开则自动收起
+                                onUserInteract = collapseBar,
+                                onDelete = { entry: DiaryEntry ->
+                                    diaryEntries = diaryEntries.filterNot { it.id == entry.id }
+                                },
+                                onSelectionModeChange = { if (tab == currentTab) selectionActive = it },
+                            )
 
-                        StarioTab.Paper -> PaperScreen(
-                            notes = paperNotes,
-                            onUserInteract = collapseBar,
-                            onDelete = { note: PaperNote ->
-                                paperNotes = paperNotes.filterNot { it.id == note.id }
-                            },
-                            onSelectionModeChange = { selectionActive = it },
-                        )
+                            StarioTab.Paper -> PaperScreen(
+                                notes = paperNotes,
+                                onUserInteract = collapseBar,
+                                onDelete = { note: PaperNote ->
+                                    paperNotes = paperNotes.filterNot { it.id == note.id }
+                                },
+                                onSelectionModeChange = { if (tab == currentTab) selectionActive = it },
+                            )
 
-                        StarioTab.Think -> PlaceholderScreen(StarioTab.Think)
+                            StarioTab.Think -> PlaceholderScreen(StarioTab.Think)
+                        }
                     }
                 }
             }
@@ -154,7 +168,7 @@ fun StarioApp() {
                     onNavExpandedChange = { navExpanded = it },
                     createExpanded = createExpanded,
                     onCreateExpandedChange = { createExpanded = it },
-                    showCreateButton = !selectionActive,
+                    showCreateButton = !hideCreateButton,
                 )
                 Spacer(Modifier.height(4.dp))
             }
