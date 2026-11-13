@@ -15,18 +15,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,15 +41,14 @@ import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
-import com.lacrimosa.staria.ui.component.DestructiveRed
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
+import com.lacrimosa.staria.ui.selection.SelectionState
 import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
-import com.lacrimosa.staria.ui.theme.PaperWhite
 import java.time.format.DateTimeFormatter
 
 private val Hairline = Color(0xFFE6E2DA)
@@ -74,19 +67,20 @@ private val SelectShift = 26.dp
  * - 第一行为最近编辑日期（精确至日），新卡片在下方
  * - 长按超过 1 秒弹出 编辑 / 删除 / 多选 的 tooltip
  * - 多选时所有卡片日期右移、左侧出现选中框；
- *   右下角新建按钮变为红色删除按钮，点击批量删除
- * - 第二行开始是正文
- * - 有出处时显示在右下角，前缀破折号
- * - 空列表时显示与时间页相同的 paper slogan
+ *   右下角新建按钮变为红色删除按钮（由底栏渲染，见 [SelectionState]）
+ * - 第二行开始是正文；有出处时显示在右下角并带破折号
+ * - 空列表时显示 paper slogan
+ * - 点击卡片：以首页同款卡片样式展开单张，居中展示，其余压暗
  */
 @Composable
 fun PaperScreen(
     notes: List<PaperNote> = SampleData.notes,
+    selection: SelectionState,
     onUserInteract: () -> Unit = {},
     onEdit: (PaperNote) -> Unit = {},
     onDelete: (PaperNote) -> Unit = {},
-    /** 多选状态变化时通知外部，用于让底栏隐藏新建按钮。 */
-    onSelectionModeChange: (Boolean) -> Unit = {},
+    /** 点击卡片时把该条抛出，由根布局渲染全屏展开浮层。 */
+    onExpand: (PaperNote) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // 新的在下方：按编辑日期升序
@@ -95,17 +89,6 @@ fun PaperScreen(
     var tooltipNote by remember { mutableStateOf<PaperNote?>(null) }
     // 长按点在窗口里的位置，tooltip 据此决定贴哪个角
     var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
-    var selectionMode by remember { mutableStateOf(false) }
-    val selectedIds = remember { mutableStateListOf<Long>() }
-
-    // 多选开关同步给外部
-    LaunchedEffect(selectionMode) {
-        onSelectionModeChange(selectionMode)
-    }
-    // 离开本页时复位，避免底栏一直不显示新建按钮
-    DisposableEffect(Unit) {
-        onDispose { onSelectionModeChange(false) }
-    }
 
     if (ordered.isEmpty()) {
         Box(
@@ -118,6 +101,7 @@ fun PaperScreen(
                 fontSize = 13.sp,
             )
         }
+        // 空列表也可能残留展开态，这里不处理即自然为空
         return
     }
 
@@ -128,8 +112,8 @@ fun PaperScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                // 只观察按下事件用于收起底栏，不消费：
-                // 若用 detectTapGestures，它会参与手势竞争并吃掉卡片的长按。
+                // 只观察按下事件用于收起底栏，不消费，
+                // 否则会与卡片的长按/点击手势竞争
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -139,27 +123,26 @@ fun PaperScreen(
                     }
                 },
         ) {
+            // 内容层铺满全屏，上下栏悬浮其上，不做额外留白
             Spacer(Modifier.height(8.dp))
 
             ordered.forEach { note ->
                 PaperNoteCard(
                     note = note,
-                    selectionMode = selectionMode,
-                    selected = selectedIds.contains(note.id),
+                    selectionMode = selection.isActive,
+                    selected = selection.contains(note.id),
                     onClick = {
                         onUserInteract()
-                        if (selectionMode) {
-                            if (selectedIds.contains(note.id)) {
-                                selectedIds.remove(note.id)
-                                if (selectedIds.isEmpty()) selectionMode = false
-                            } else {
-                                selectedIds.add(note.id)
-                            }
+                        if (selection.isActive) {
+                            selection.toggle(note.id)
+                        } else {
+                            // 交给根布局渲染全屏浮层，保证能盖住顶栏与底栏
+                            onExpand(note)
                         }
                     },
                     onLongPress = { pos ->
                         onUserInteract()
-                        if (!selectionMode) {
+                        if (!selection.isActive) {
                             tooltipAnchor = pos
                             tooltipNote = note
                         }
@@ -168,7 +151,7 @@ fun PaperScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // 底部留白，避免最后一张被底栏压住
+            // 底部无需额外留白：底栏本身是悬浮层
             Spacer(Modifier.height(12.dp))
         }
 
@@ -199,45 +182,12 @@ fun PaperScreen(
                         icon = IconChecklist,
                         onClick = {
                             tooltipNote = null
-                            selectionMode = true
-                            selectedIds.clear()
-                            selectedIds.add(note.id)
+                            selection.enter(note.id)
                         },
                     ),
                 ),
                 onDismiss = { tooltipNote = null },
             )
-        }
-
-        // ---- 多选：右下角红色批量删除按钮 ----
-        if (selectionMode) {
-            val byId = remember(ordered) { ordered.associateBy { it.id } }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = BarSidePadding, bottom = 18.dp)
-                    .size(58.dp)
-                    .background(DestructiveRed, CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = selectedIds.isNotEmpty(),
-                    ) {
-                        selectedIds.toList().forEach { id ->
-                            byId[id]?.let(onDelete)
-                        }
-                        selectionMode = false
-                        selectedIds.clear()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = IconTrash,
-                    contentDescription = "删除所选",
-                    modifier = Modifier.size(22.dp),
-                    tint = PaperWhite,
-                )
-            }
         }
     }
 }
@@ -274,8 +224,7 @@ private fun PaperNoteCard(
             .background(CardPaper, RoundedCornerShape(14.dp))
             .border(1.dp, Hairline, RoundedCornerShape(14.dp))
             // 点击与长按放在同一个 detectTapGestures 里：
-            // 拆成 combinedClickable + pointerInput 时，
-            // 内层 pointerInput 会先消费按下事件，onClick 收不到。
+            // 拆成两个 modifier 时内层会先消费按下事件，导致另一种手势失效
             .pointerInput(selectionMode) {
                 detectTapGestures(
                     onTap = { onClick() },

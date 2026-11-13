@@ -46,13 +46,13 @@ fun HomeScreen(
             .fillMaxSize()
             .background(PaperWhite),
     ) {
+        // 内容层铺满全屏，上下栏悬浮其上，不做额外留白
         val topGap = maxHeight * 0.12f
 
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // slogan 顶部留一点，配合根布局的头像区形成"中间靠上"
             Spacer(Modifier.height(topGap))
 
             Text(

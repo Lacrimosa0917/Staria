@@ -49,6 +49,7 @@ import com.lacrimosa.staria.ui.icon.IconPaperStack
 import com.lacrimosa.staria.ui.icon.IconPlus
 import com.lacrimosa.staria.ui.icon.IconQuill
 import com.lacrimosa.staria.ui.icon.IconQuote
+import com.lacrimosa.staria.ui.icon.IconTrash
 import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
@@ -79,6 +80,9 @@ private val BarGap = 12.dp
 
 /** 底栏左右留白。页面里需要对齐底栏元素时引用这个常量，避免两处硬编码走样。 */
 val BarSidePadding = 20.dp
+
+/** 底栏总高度（供页面计算对齐用）。 */
+val BarHeight: Dp = CapsuleHeight
 
 /**
  * 底栏第一个页面按键的圆心相对屏幕左缘的横向偏移。
@@ -125,18 +129,19 @@ fun StariaBottomBar(
     onCreateExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * 是否显示新建按钮。
+     * 多选模式下的删除按钮。
      *
-     * 多选模式下页面会用红色删除按钮占据右下角，此时应隐藏新建按钮，
-     * 否则两个圆形按钮会叠在一起。
+     * 传非空值时，右下角用红色删除按钮**顶替**新建按钮（同一个位置、
+     * 同一个尺寸），而不是在页面里另画一个。这样两种状态的按钮不会错位。
      */
-    showCreateButton: Boolean = true,
+    deleteAction: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier = modifier) {
         val tabCount = StariaTab.entries.size
-        // 展开态：吃掉除新建按钮与间距外的全部宽度；
-        // 新建按钮隐藏时胶囊可以吃到整个宽度
-        val reserved = if (showCreateButton) CreateButtonSize + BarGap else 0.dp
+        val hasFloating = deleteAction != null || true
+        // 展开态：吃掉除右下角圆钮与间距外的全部宽度。
+        // 圆钮无论是新建还是删除都占同样位置，所以宽度始终扣掉它。
+        val reserved = CreateButtonSize + BarGap
         val expandedWidth = maxWidth - reserved
         val cellWidth = (expandedWidth - CapsuleHPad * 2) / tabCount.toFloat()
         // 收起态：恰好等于一个格子，保证首个按键位置不变
@@ -153,7 +158,12 @@ fun StariaBottomBar(
             onSelect = onSelect,
         )
 
-        if (showCreateButton) {
+        if (deleteAction != null) {
+            DeleteButton(
+                modifier = Modifier.align(Alignment.BottomEnd),
+                onClick = deleteAction,
+            )
+        } else {
             CreateButton(
                 modifier = Modifier.align(Alignment.BottomEnd),
                 expanded = createExpanded,
@@ -161,6 +171,36 @@ fun StariaBottomBar(
                 onCreate = onCreate,
             )
         }
+    }
+}
+
+/**
+ * 多选模式下的红色删除按钮。
+ *
+ * 尺寸与新建按钮完全一致，保证两种状态切换时位置不跳动。
+ */
+@Composable
+private fun DeleteButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .size(CreateButtonSize)
+            .background(DestructiveRed, CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = IconTrash,
+            contentDescription = "删除所选",
+            modifier = Modifier.size(22.dp),
+            tint = PaperWhite,
+        )
     }
 }
 

@@ -14,7 +14,7 @@ import com.lacrimosa.staria.ui.theme.InkMuted
  * 空白占位页。
  *
  * 时间 / 纸条 / 思索三个页面暂未设计，这里只保证底栏切换可用。
- * 页面本身留白，不画标题，避免在正式设计出来前留下需要清理的临时元素。
+ * 内容层铺满全屏、上下栏悬浮，这里的居中标识仍按整屏居中即可。
  */
 @Composable
 fun PlaceholderScreen(

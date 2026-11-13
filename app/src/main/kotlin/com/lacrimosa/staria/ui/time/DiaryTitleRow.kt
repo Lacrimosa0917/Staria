@@ -97,7 +97,7 @@ fun DiaryTitleRow(
                             },
                         )
                     }
-                    .padding(vertical = 9.dp, horizontal = 2.dp),
+                    .padding(vertical = 6.dp, horizontal = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
