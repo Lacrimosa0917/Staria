@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.lacrimosa.stario"
+    namespace = "com.lacrimosa.staria"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.lacrimosa.stario"
+        applicationId = "com.lacrimosa.staria"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
