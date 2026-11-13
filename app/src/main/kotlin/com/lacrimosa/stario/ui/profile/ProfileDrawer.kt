@@ -111,14 +111,16 @@ fun ProfileDrawer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    // 顺序很重要：先加 padding 再 graphicsLayer，
+                    // 否则 size.width 是内缩后的宽度，translationX 会算小，
+                    // 导致动画结束后仍有偏移、点击坐标与视觉位置错位。
+                    .systemBarsPadding()
                     .graphicsLayer {
-                        // 夹在 [-width, 0]：过冲时也不会把抽屉右缘推离屏幕左侧
                         translationX = (-size.width * (1f - progress.value))
                             .coerceAtMost(0f)
                             .coerceAtLeast(-size.width)
                     }
-                    .background(PaperWhite)
-                    .systemBarsPadding(),
+                    .background(PaperWhite),
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Spacer(Modifier.height(28.dp))
