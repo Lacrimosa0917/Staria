@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Staria</string>
+    <string name="app_name">星笺</string>
+    <string name="slogan">星笺</string>
+
+    <string name="tab_home">首页</string>
+    <string name="tab_time">时间</string>
+    <string name="tab_paper">纸条</string>
+    <string name="tab_think">思索</string>
+
+    <string name="create_diary">日记</string>
+    <string name="create_excerpt">摘录</string>
+    <string name="create_essay">随笔</string>
+
+    <string name="cd_avatar">个人主页</string>
+    <string name="cd_create">新建</string>
+    <string name="cd_collapse">收起</string>
 </resources>
