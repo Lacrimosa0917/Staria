@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,12 +32,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.stario.R
@@ -71,9 +72,9 @@ enum class CreateKind(val labelRes: Int, val icon: ImageVector) {
 private val Hairline = Color(0xFFE6E2DA)
 
 private val CapsuleHeight = 58.dp
-private val NavItemWidth = 60.dp
-private val CollapsedWidth = 76.dp
+private val CapsuleHPad = 5.dp
 private val CreateButtonSize = 54.dp
+private val BarGap = 12.dp
 
 /**
  * 底部：页面底栏（长条胶囊）+ 新建按钮（圆形，收在胶囊右侧）。
@@ -81,6 +82,12 @@ private val CreateButtonSize = 54.dp
  * 交互（README）：
  * - 胶囊收起时只显示当前页面；点击展开露出四项，点其它项切换并收起
  * - 新建按钮点击后向上展开，上下排列三个圆形按钮
+ *
+ * 布局约定：
+ * - 展开时胶囊占满「总宽 - 新建按钮 - 间距」，两者基本占满屏宽
+ * - 收起态宽度**正好等于展开态的一个格子**，因此第一个按键的中心在
+ *   展开/收起之间完全不动（不会出现首页按键左右跳动）
+ * - 不绘制阴影，只保留 1dp 描边（后续会替换成新 UI）
  */
 @Composable
 fun StarioBottomBar(
@@ -93,12 +100,21 @@ fun StarioBottomBar(
     onCreateExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier) {
-        // 胶囊靠左（README：新建按钮收在页面底栏右侧，两者并排）
+    BoxWithConstraints(modifier = modifier) {
+        val tabCount = StarioTab.entries.size
+        // 展开态：吃掉除新建按钮与间距外的全部宽度
+        val expandedWidth = maxWidth - CreateButtonSize - BarGap
+        val cellWidth = (expandedWidth - CapsuleHPad * 2) / tabCount.toFloat()
+        // 收起态：恰好等于一个格子，保证首个按键位置不变
+        val collapsedWidth = cellWidth + CapsuleHPad * 2
+
         NavCapsule(
             modifier = Modifier.align(Alignment.BottomStart),
             current = current,
             expanded = navExpanded,
+            expandedWidth = expandedWidth,
+            collapsedWidth = collapsedWidth,
+            cellWidth = cellWidth,
             onExpandedChange = onNavExpandedChange,
             onSelect = onSelect,
         )
@@ -117,18 +133,18 @@ private fun NavCapsule(
     modifier: Modifier = Modifier,
     current: StarioTab,
     expanded: Boolean,
+    expandedWidth: Dp,
+    collapsedWidth: Dp,
+    cellWidth: Dp,
     onExpandedChange: (Boolean) -> Unit,
     onSelect: (StarioTab) -> Unit,
 ) {
-    // 显式圆角：percent 形状在阴影图层里会退化成矩形轮廓
+    // 显式圆角：percent 形状在裁剪/描边时会出现直角残留
     val shape = RoundedCornerShape(CapsuleHeight / 2)
 
-    // 只对宽度做动画。不用 animateContentSize，因为它会把内容裁到当前尺寸，
-    // 阴影下沿会被切出一条直边。
-    val expandedWidth = NavItemWidth * StarioTab.entries.size + 10.dp
-    val targetWidth = if (expanded) expandedWidth else CollapsedWidth
+    // 只对宽度做动画。不用 animateContentSize，因为它会把内容裁到当前尺寸。
     val width by animateDpAsState(
-        targetValue = targetWidth,
+        targetValue = if (expanded) expandedWidth else collapsedWidth,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow,
@@ -140,17 +156,16 @@ private fun NavCapsule(
         modifier = modifier
             .width(width)
             .height(CapsuleHeight)
-            .shadow(elevation = 10.dp, shape = shape, clip = false)
             .background(PaperWhite, shape)
             .border(BorderStroke(1.dp, Hairline), shape)
             .clip(shape)
-            .padding(horizontal = 5.dp),
+            .padding(horizontal = CapsuleHPad),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (expanded) {
             StarioTab.entries.forEach { tab ->
                 NavItem(
-                    modifier = Modifier.width(NavItemWidth).height(CapsuleHeight),
+                    modifier = Modifier.width(cellWidth).height(CapsuleHeight),
                     tab = tab,
                     selected = tab == current,
                     onClick = {
@@ -160,8 +175,9 @@ private fun NavCapsule(
                 )
             }
         } else {
+            // 与展开态第一格完全同位同宽
             NavItem(
-                modifier = Modifier.width(CollapsedWidth - 10.dp).height(CapsuleHeight),
+                modifier = Modifier.width(cellWidth).height(CapsuleHeight),
                 tab = current,
                 selected = true,
                 onClick = { onExpandedChange(true) },
@@ -241,7 +257,6 @@ private fun CreateButton(
                         scaleY = s
                     }
                     .size(actionSize)
-                    .shadow(6.dp, CircleShape, clip = false)
                     .background(CardPaper, CircleShape)
                     .border(BorderStroke(1.dp, Hairline), CircleShape)
                     .clickable(
@@ -267,7 +282,6 @@ private fun CreateButton(
         Box(
             modifier = Modifier
                 .size(CreateButtonSize)
-                .shadow(10.dp, CircleShape, clip = false)
                 .background(PaperWhite, CircleShape)
                 .border(BorderStroke(1.dp, Hairline), CircleShape)
                 .clickable(

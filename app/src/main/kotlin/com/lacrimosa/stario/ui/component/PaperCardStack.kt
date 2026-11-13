@@ -87,22 +87,38 @@ fun PaperCardStack(
     val density = LocalDensity.current
 
     BoxWithConstraints(modifier = modifier) {
-        // 卡片尺寸随可用空间自适应：
-        // 宽度按可用宽取比例，同时用可用高度反推上限，防止横屏/小窗时
-        // 卡片被压扁导致文字与出处重叠
+        // 卡片尺寸随可用空间自适应；同时用可用高度反推上限，
+        // 防止小窗时卡片被压扁导致正文与出处重叠
         val aspect = 1.36f
-        val widthLimit = minOf(maxWidth * 0.56f, 224.dp)
+        val widthLimit = minOf(maxWidth * 0.60f, 240.dp)
         val heightLimit = maxHeight * 0.92f
         val cardHeight = minOf(widthLimit * aspect, heightLimit)
         val cardWidth = cardHeight / aspect
-        val stepX = cardWidth * 0.115f
-        val stepY = cardHeight * 0.070f
 
         val count = order.size
-        // 让整个堆叠视觉居中：把总偏移的一半反抵消
-        val last = (count - 1).toFloat()
-        val shiftX = stepX * (-last / 2f)
-        val shiftY = stepY * (last / 2f)
+        val last = (count - 1).coerceAtLeast(1)
+
+        // 透视缩放：越靠后越小（保留参考实现的立体感）
+        fun scaleAt(slot: Int): Float = 850f / (850f + slot * 70f)
+        val scaleFront = scaleAt(0)
+
+        // ---- 间距：在「纸堆层次感」与「视觉中心」之间取平衡 ----
+        // 间距按卡片尺寸取固定比例，宽度只作为溢出保护。
+        // 纸堆跨度 = stripX*(n-1)，跨度越小整体重心越靠近前排（即屏幕中心），
+        // 所以这里压得比较紧，只保留刚够分辨每一层的宽度。
+        val availRight = maxWidth / 2 - cardWidth / 2
+        val stripX = minOf(cardWidth * 0.032f, availRight / last * 0.82f)
+            .coerceAtLeast(4.dp)
+        val stripY = minOf(cardHeight * 0.026f, maxHeight * 0.06f / last)
+            .coerceAtLeast(3.dp)
+
+        // ---- 中心对齐：前排为主，兼顾纸堆整体 ----
+        // 后排向右上延展，纸堆包围盒中心会比前排中心右偏 stripX*(n-1)/2。
+        // 完全按包围盒居中会把正文卡推向左（正文与 slogan 错位）；
+        // 完全按前排居中则纸堆观感偏右。
+        // 取 1/4 补偿：正文卡只左移一点点，纸堆重心也明显回正。
+        val centerShiftX = with(density) { (stripX * (count - 1) / 4).toPx() }
+        val centerShiftY = with(density) { (stripY * (count - 1) / 4).toPx() }
 
         // 与参考实现同量级的阈值
         val tapSlopPx = with(density) { 6.dp.toPx() }
@@ -117,9 +133,19 @@ fun PaperCardStack(
                 val note = visible[noteIndex]
                 val isFront = slot == 0
 
-                val targetX = with(density) { (shiftX + stepX * slot.toFloat()).toPx() }
-                val targetY = with(density) { (shiftY - stepY * slot.toFloat()).toPx() }
-                val targetScale = 850f / (850f + slot * 70f)
+                val factor = slot.toFloat()
+                val scale = scaleAt(slot)
+
+                // 水平：右边缘等距（right_i = stripX*i + 常数）
+                //   tx_i = stripX*i + (cardW/2)(scale0 - scale_i)
+                // 垂直：上边缘等距（top_i 每层上移 stripY）
+                //   ty_i = -stripY*i + (cardH/2)(scale_i - scale0)
+                val targetX = with(density) {
+                    (stripX * factor + (cardWidth / 2) * (scaleFront - scale)).toPx()
+                } - centerShiftX
+                val targetY = with(density) {
+                    (-stripY * factor + (cardHeight / 2) * (scale - scaleFront)).toPx()
+                } + centerShiftY
 
                 val animX by animateFloatAsState(
                     targetValue = targetX,
@@ -132,7 +158,7 @@ fun PaperCardStack(
                     label = "card-y-$noteIndex",
                 )
                 val animScale by animateFloatAsState(
-                    targetValue = targetScale,
+                    targetValue = scale,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMediumLow,
