@@ -36,18 +36,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.lacrimosa.stario.data.clampNickname
+import com.lacrimosa.stario.data.NICKNAME_MAX_WEIGHT
+import com.lacrimosa.stario.data.nicknameWeight
 import com.lacrimosa.stario.ui.theme.Ink
 import com.lacrimosa.stario.ui.theme.InkMuted
 import com.lacrimosa.stario.ui.theme.PaperWhite
 
 private val Hairline = Color(0xFFE6E2DA)
+private val DangerRed = Color(0xFFD93A3A)
 
 /**
  * 修改昵称浮窗（README：包含取消与确定两个选项）。
  *
- * 输入通过 [clampNickname] 实时截断，超出上限时直接不允许继续输入，
- * 而不是输入完再报错。
+ * 字数以「权重」计：汉字 3、英文与数字 1，上限 24（即 8 个汉字 / 24 个字母）。
+ * 输入框右侧实时显示 `已用/24`，超出时转为红色，同时确定按钮置灰不可点。
  */
 @Composable
 fun NicknameDialog(
@@ -60,6 +62,10 @@ fun NicknameDialog(
     val focusManager = LocalFocusManager.current
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    val used = nicknameWeight(text)
+    val overLimit = used > NICKNAME_MAX_WEIGHT
+    val canConfirm = text.isNotBlank() && !overLimit
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -98,42 +104,49 @@ fun NicknameDialog(
 
                 Spacer(Modifier.height(16.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFFAF8F5), RoundedCornerShape(10.dp))
-                        .border(1.dp, Hairline, RoundedCornerShape(10.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                ) {
-                    if (text.isEmpty()) {
-                        Text(
-                            text = "输入昵称",
-                            color = InkMuted,
-                            fontSize = 15.sp,
+                // 输入框 + 右侧计数
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Color(0xFFFAF8F5), RoundedCornerShape(10.dp))
+                            .border(
+                                width = 1.dp,
+                                color = if (overLimit) DangerRed else Hairline,
+                                shape = RoundedCornerShape(10.dp),
+                            )
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    ) {
+                        if (text.isEmpty()) {
+                            Text(
+                                text = "输入昵称",
+                                color = InkMuted,
+                                fontSize = 15.sp,
+                            )
+                        }
+                        BasicTextField(
+                            value = text,
+                            // 不再截断输入：允许超出后由计数变红并禁用确定，
+                            // 让用户看到自己到底超了多少，而不是输不进去。
+                            onValueChange = { text = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            textStyle = TextStyle(color = Ink, fontSize = 15.sp),
+                            singleLine = true,
+                            cursorBrush = SolidColor(Ink),
                         )
                     }
-                    BasicTextField(
-                        value = text,
-                        onValueChange = { text = clampNickname(it) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        textStyle = TextStyle(
-                            color = Ink,
-                            fontSize = 15.sp,
-                        ),
-                        singleLine = true,
-                        cursorBrush = SolidColor(Ink),
+
+                    Spacer(Modifier.width(10.dp))
+
+                    Text(
+                        text = "$used/$NICKNAME_MAX_WEIGHT",
+                        color = if (overLimit) DangerRed else InkMuted,
+                        fontSize = 12.sp,
+                        fontWeight = if (overLimit) FontWeight.Medium else FontWeight.Normal,
                     )
                 }
-
-                Spacer(Modifier.height(10.dp))
-
-                Text(
-                    text = "最多 8 个汉字，3 个英文或数字字符视为 1 个汉字",
-                    color = InkMuted,
-                    fontSize = 11.sp,
-                )
 
                 Spacer(Modifier.height(20.dp))
 
@@ -153,7 +166,7 @@ fun NicknameDialog(
                     DialogAction(
                         label = "确定",
                         primary = true,
-                        enabled = text.isNotBlank(),
+                        enabled = canConfirm,
                         onClick = {
                             focusManager.clearFocus()
                             onConfirm(text)
@@ -172,12 +185,22 @@ private fun DialogAction(
     onClick: () -> Unit,
     enabled: Boolean = true,
 ) {
+    // 不可用时整体压成全灰，避免和「可用的黑色主按钮」混淆
+    val bg = when {
+        !primary -> Color.Transparent
+        !enabled -> Color(0xFFD8D4CC)
+        else -> Ink
+    }
+    val fg = when {
+        !primary && !enabled -> InkMuted.copy(alpha = 0.5f)
+        !primary -> Ink
+        !enabled -> PaperWhite
+        else -> PaperWhite
+    }
+
     Box(
         modifier = Modifier
-            .background(
-                color = if (primary) Ink else Color.Transparent,
-                shape = RoundedCornerShape(9.dp),
-            )
+            .background(bg, RoundedCornerShape(9.dp))
             .then(
                 if (primary) Modifier
                 else Modifier.border(1.dp, Hairline, RoundedCornerShape(9.dp)),
@@ -192,11 +215,7 @@ private fun DialogAction(
     ) {
         Text(
             text = label,
-            color = when {
-                !enabled -> InkMuted
-                primary -> PaperWhite
-                else -> Ink
-            },
+            color = fg,
             fontSize = 14.sp,
             fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
         )

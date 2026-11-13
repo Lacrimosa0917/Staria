@@ -28,9 +28,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -72,22 +72,23 @@ fun ProfileDrawer(
 ) {
     if (!visible) return
 
-    val density = LocalDensity.current
-    // 0 = 完全收起（仅作为初始值），1 = 完全展开
+    // 0 = 完全收起，1 = 完全展开
     val progress = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
         progress.animateTo(
             targetValue = 1f,
+            // 不能用 LowBouncy：过冲时 translationX 会变成正值，
+            // 抽屉右侧越过屏幕左缘，左侧就会露出下一层页面。
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioLowBouncy,
+                dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow,
             ),
         )
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        // ---- 右侧 1/4：压暗的首页，点击收起 ----
+        // ---- 右侧 1/4：压暗的当前页面，点击收起 ----
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,37 +101,47 @@ fun ProfileDrawer(
         )
 
         // ---- 左侧 3/4：抽屉本体 ----
+        // 外层用 clipToBounds 兜住，即使动画中途有微小过冲也不会漏出下层页面
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(DRAWER_FRACTION)
-                .graphicsLayer {
-                    translationX = -size.width * (1f - progress.value)
-                }
-                .background(PaperWhite)
-                .systemBarsPadding(),
+                .clipToBounds(),
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Spacer(Modifier.height(28.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        // 夹在 [-width, 0]：过冲时也不会把抽屉右缘推离屏幕左侧
+                        translationX = (-size.width * (1f - progress.value))
+                            .coerceAtMost(0f)
+                            .coerceAtLeast(-size.width)
+                    }
+                    .background(PaperWhite)
+                    .systemBarsPadding(),
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Spacer(Modifier.height(28.dp))
 
-                NicknameRow(
-                    nickname = nickname,
-                    onEdit = onEditNickname,
-                )
+                    NicknameRow(
+                        nickname = nickname,
+                        onEdit = onEditNickname,
+                    )
 
-                Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(28.dp))
 
-                CountsCard(counts = counts)
+                    CountsCard(counts = counts)
 
-                Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(20.dp))
 
-                EntryRow(label = "星尘", onClick = onOpenRecycleBin)
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 28.dp, end = 28.dp),
-                    thickness = 1.dp,
-                    color = Hairline,
-                )
-                EntryRow(label = "设置", onClick = onOpenSettings)
+                    EntryRow(label = "星尘", onClick = onOpenRecycleBin)
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 28.dp, end = 28.dp),
+                        thickness = 1.dp,
+                        color = Hairline,
+                    )
+                    EntryRow(label = "设置", onClick = onOpenSettings)
+                }
             }
         }
     }

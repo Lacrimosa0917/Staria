@@ -59,4 +59,26 @@ object SampleData {
         paper = notes.size,
         essay = 43,
     )
+
+    /**
+     * 日记占位数据，供时间页展示。
+     *
+     * 日期从今天往前铺，方便验证时间轴「靠下为最新日期」的排布。
+     */
+    val diaryEntries: List<DiaryEntry> = run {
+        val base = java.time.LocalDate.now()
+        fun d(daysAgo: Long) = base.minusDays(daysAgo)
+        listOf(
+            DiaryEntry(1, d(0), "今天的风很轻"),
+            DiaryEntry(2, d(1), "关于早起这件事"),
+            DiaryEntry(3, d(1), "晚上读完了《小王子》"),
+            DiaryEntry(4, d(3), "下雨天适合发呆"),
+            DiaryEntry(5, d(5), "换了新的台灯"),
+            DiaryEntry(6, d(8), "生日"),
+            DiaryEntry(7, d(8), "收到一封信"),
+            DiaryEntry(8, d(12), "第一次做手冲"),
+            DiaryEntry(9, d(20), "搬到新城市的第一周"),
+            DiaryEntry(10, d(35), "旧年的最后一天"),
+        )
+    }
 }

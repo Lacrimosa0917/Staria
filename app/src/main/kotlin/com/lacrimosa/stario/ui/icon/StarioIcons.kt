@@ -210,3 +210,36 @@ val IconChevronRight: ImageVector by lazy {
         lineTo(9.5f, 18.5f)
     }
 }
+
+/** 左尖括号：月份切换。 */
+val IconChevronLeft: ImageVector by lazy {
+    build("ChevronLeft") {
+        moveTo(14.5f, 5.5f)
+        lineTo(8f, 12f)
+        lineTo(14.5f, 18.5f)
+    }
+}
+
+/** 垃圾桶：删除。 */
+val IconTrash: ImageVector by lazy {
+    build("Trash") {
+        // 盖
+        moveTo(4.5f, 6.8f)
+        lineTo(19.5f, 6.8f)
+        // 提手
+        moveTo(9.4f, 6.8f)
+        lineTo(9.4f, 4.6f)
+        lineTo(14.6f, 4.6f)
+        lineTo(14.6f, 6.8f)
+        // 桶身
+        moveTo(6.6f, 6.8f)
+        lineTo(7.5f, 19.4f)
+        lineTo(16.5f, 19.4f)
+        lineTo(17.4f, 6.8f)
+        // 两道竖线
+        moveTo(10.4f, 10.2f)
+        lineTo(10.6f, 16.2f)
+        moveTo(13.6f, 10.2f)
+        lineTo(13.4f, 16.2f)
+    }
+}

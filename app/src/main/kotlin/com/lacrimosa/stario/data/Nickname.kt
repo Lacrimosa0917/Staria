@@ -34,26 +34,6 @@ fun nicknameWeight(text: String): Int {
 }
 
 /**
- * 按权重截断昵称，保证输入永远不会超过上限。
- *
- * 逐码点累加而不是按 length 截断，避免把表情这类代理对切成半个字符。
- */
-fun clampNickname(text: String): String {
-    val sb = StringBuilder()
-    var sum = 0
-    var i = 0
-    while (i < text.length) {
-        val cp = text.codePointAt(i)
-        val w = weightOf(cp)
-        if (sum + w > NICKNAME_MAX_WEIGHT) break
-        sum += w
-        sb.appendCodePoint(cp)
-        i += Character.charCount(cp)
-    }
-    return sb.toString()
-}
-
-/**
  * 昵称存储。
  *
  * 只有一项数据，用 SharedPreferences 即可；等接入 Room 后再统一迁移。

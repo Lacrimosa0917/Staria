@@ -77,6 +77,30 @@ private val CapsuleHPad = 5.dp
 private val CreateButtonSize = CapsuleHeight
 private val BarGap = 12.dp
 
+/** 底栏左右留白。页面里需要对齐底栏元素时引用这个常量，避免两处硬编码走样。 */
+val BarSidePadding = 20.dp
+
+/**
+ * 底栏第一个页面按键的圆心相对屏幕左缘的横向偏移。
+ *
+ * 时间页的竖向时间轴要对齐到这里（README：时间轴对齐左下角页面按键的中心）。
+ */
+fun navFirstItemCenterX(screenWidth: Dp): Dp {
+    val expandedWidth = screenWidth - CreateButtonSize - BarGap
+    val cellWidth = (expandedWidth - CapsuleHPad * 2) / StarioTab.entries.size.toFloat()
+    return BarSidePadding + CapsuleHPad + cellWidth / 2
+}
+
+/**
+ * 底栏第一个页面按键的**左边缘**相对屏幕左缘的横向偏移。
+ *
+ * 时间页的时间轴竖线对齐到这里（需求：竖线对准页面按键左侧）。
+ *
+ * 由 BarSidePadding + 胶囊内边距组成。注意圆点自身有半径，
+ * 页面里给圆点定位时要再减去半径才能让「圆点边缘」贴住按键左缘。
+ */
+fun navFirstItemLeftX(): Dp = BarSidePadding + CapsuleHPad
+
 /**
  * 底部：页面底栏（长条胶囊）+ 新建按钮（圆形，收在胶囊右侧）。
  *
