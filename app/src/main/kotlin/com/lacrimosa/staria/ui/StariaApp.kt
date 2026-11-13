@@ -29,9 +29,20 @@ import com.lacrimosa.staria.data.DiaryEntry
 import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.SampleData
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import com.lacrimosa.staria.ui.component.AvatarButton
+import com.lacrimosa.staria.ui.component.AvatarSize
+import com.lacrimosa.staria.ui.component.AvatarTopPadding
+import com.lacrimosa.staria.ui.component.BarBottomPadding
+import com.lacrimosa.staria.ui.component.BarHeight
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.ContentInsets
 import com.lacrimosa.staria.ui.component.CreateKind
+import com.lacrimosa.staria.ui.component.LocalContentInsets
+import com.lacrimosa.staria.ui.component.ScrollEdgeGap
 import com.lacrimosa.staria.ui.component.StariaBottomBar
 import com.lacrimosa.staria.ui.component.StariaTab
 import com.lacrimosa.staria.ui.home.HomeScreen
@@ -118,6 +129,25 @@ fun StariaApp() {
         selection.exit()
     }
 
+    // 悬浮层的真实占位高度：必须把系统栏算进去。
+    // 头像 / 底栏自身带 statusBarsPadding、systemBarsPadding，
+    // 只按控件高度算会短一截，内容仍会压到它们身上。
+    val systemBars = WindowInsets.systemBars
+    val density = LocalDensity.current
+    // getTop/getBottom 返回像素值，需在 Density 作用域内转成 dp
+    val statusBarTopPx = systemBars.getTop(density)
+    val navBarBottomPx = systemBars.getBottom(density)
+    val statusBarTop = with(density) { statusBarTopPx.toDp() }
+    val navBarBottom = with(density) { navBarBottomPx.toDp() }
+
+    val contentInsets = ContentInsets(
+        // 状态栏 + 头像上间距 + 头像直径 + 一点缝隙
+        top = statusBarTop + AvatarTopPadding + AvatarSize + ScrollEdgeGap,
+        // 底栏高度 + 下间距 + 导航栏 + 一点缝隙
+        bottom = BarHeight + BarBottomPadding + navBarBottom + ScrollEdgeGap,
+    )
+
+    CompositionLocalProvider(LocalContentInsets provides contentInsets) {
     Box(modifier = Modifier.fillMaxSize().background(PaperWhite)) {
         // ---------- 内容层：铺满全屏 ----------
         // 上下栏改为悬浮，内容不再被它们挤占高度，
@@ -234,6 +264,7 @@ fun StariaApp() {
                 },
             )
         }
+    }
     }
 
     // ---------- 修改昵称浮窗 ----------

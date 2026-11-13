@@ -36,6 +36,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,8 +45,7 @@ import com.lacrimosa.staria.data.DiaryGroup
 import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
-import com.lacrimosa.staria.ui.component.ScrollEndInset
-import com.lacrimosa.staria.ui.component.ScrollStartInset
+import com.lacrimosa.staria.ui.component.LocalContentInsets
 import com.lacrimosa.staria.ui.component.DestructiveRed
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.component.navFirstItemLeftX
@@ -85,11 +85,9 @@ private val DateTextFormatter: DateTimeFormatter =
 private val DotTop = 20.dp
 
 /**
- * 内容顶部留白，轴线起笔位置要与之对齐。
- *
- * 滚到最上方时第一组停在悬浮头像下方；中途滚动可从其下方穿过。
+ * 内容顶部留白在运行时从 [LocalContentInsets] 取，
+ * 轴线起笔位置要与之对齐，所以不能再写成编译期常量。
  */
-private val ContentTopPad = ScrollStartInset
 
 /**
  * 时间（日记查看页）。
@@ -168,6 +166,10 @@ fun TimeScreen(
         // 不用 IntrinsicSize + fillMaxHeight：那会把行撑高，导致节点稀疏。
         val groupHeights = remember(groups) { mutableStateListOf<Int>() }
 
+        // 顶部留白从根布局提供的真实 inset 取，轴线起笔要与之对齐
+        val insets = LocalContentInsets.current
+        val topPadPx = with(LocalDensity.current) { insets.top.toPx() }
+
         Column(modifier = Modifier.fillMaxSize()) {
             // 不足一屏时上方留白，效果即「从上方截断」（底部对齐）
             Spacer(modifier = Modifier.weight(1f))
@@ -181,7 +183,7 @@ fun TimeScreen(
                     val dotCenterOffset = DotTop.toPx() + 3.5.dp.toPx()
                     val capPx = 14.dp.toPx()
 
-                    var cursor = ContentTopPad.toPx()
+                    var cursor = topPadPx
                     groupHeights.forEachIndexed { index, groupHeight ->
                         val dotY = cursor + dotCenterOffset
                         val isFirst = index == 0
@@ -225,7 +227,7 @@ fun TimeScreen(
                             }
                         },
                 ) {
-                    Spacer(Modifier.height(ContentTopPad))
+                    Spacer(Modifier.height(insets.top))
 
                     groups.forEachIndexed { index, group ->
                         Box(
@@ -267,7 +269,7 @@ fun TimeScreen(
                     }
 
                     // 滚到底时最后一组停在悬浮底栏上方
-                    Spacer(Modifier.height(ScrollEndInset))
+                    Spacer(Modifier.height(insets.bottom))
                 }
             }
         }

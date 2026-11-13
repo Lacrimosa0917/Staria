@@ -41,8 +41,7 @@ import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
-import com.lacrimosa.staria.ui.component.ScrollEndInset
-import com.lacrimosa.staria.ui.component.ScrollStartInset
+import com.lacrimosa.staria.ui.component.LocalContentInsets
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
@@ -109,6 +108,8 @@ fun PaperScreen(
 
     val scrollState = rememberScrollState()
 
+    val insets = LocalContentInsets.current
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -125,9 +126,8 @@ fun PaperScreen(
                     }
                 },
         ) {
-            // 滚到最上方时第一张停在悬浮头像下方；
-            // 中途滚动仍可从头像下方穿过
-            Spacer(Modifier.height(ScrollStartInset))
+            // 滚到最上方时第一张停在悬浮头像之下（含状态栏高度）
+            Spacer(Modifier.height(insets.top))
 
             ordered.forEach { note ->
                 PaperNoteCard(
@@ -154,9 +154,8 @@ fun PaperScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // 滚到底时最后一张要停在悬浮底栏上方，
-            // 中途滚动仍可从底栏下方穿过
-            Spacer(Modifier.height(ScrollEndInset))
+            // 滚到底时最后一张停在悬浮底栏之上（含导航栏高度）
+            Spacer(Modifier.height(insets.bottom))
         }
 
         // ---- 长按唤起的 tooltip ----
