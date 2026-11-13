@@ -44,6 +44,8 @@ import com.lacrimosa.staria.data.DiaryGroup
 import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.ScrollEndInset
+import com.lacrimosa.staria.ui.component.ScrollStartInset
 import com.lacrimosa.staria.ui.component.DestructiveRed
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.component.navFirstItemLeftX
@@ -85,9 +87,9 @@ private val DotTop = 20.dp
 /**
  * 内容顶部留白，轴线起笔位置要与之对齐。
  *
- * 内容层铺满全屏、上下栏悬浮，这里只留一点视觉呼吸感。
+ * 滚到最上方时第一组停在悬浮头像下方；中途滚动可从其下方穿过。
  */
-private val ContentTopPad = 24.dp
+private val ContentTopPad = ScrollStartInset
 
 /**
  * 时间（日记查看页）。
@@ -264,7 +266,8 @@ fun TimeScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(24.dp))
+                    // 滚到底时最后一组停在悬浮底栏上方
+                    Spacer(Modifier.height(ScrollEndInset))
                 }
             }
         }

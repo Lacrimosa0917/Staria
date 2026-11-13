@@ -41,6 +41,8 @@ import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.ScrollEndInset
+import com.lacrimosa.staria.ui.component.ScrollStartInset
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
@@ -123,8 +125,9 @@ fun PaperScreen(
                     }
                 },
         ) {
-            // 内容层铺满全屏，上下栏悬浮其上，不做额外留白
-            Spacer(Modifier.height(8.dp))
+            // 滚到最上方时第一张停在悬浮头像下方；
+            // 中途滚动仍可从头像下方穿过
+            Spacer(Modifier.height(ScrollStartInset))
 
             ordered.forEach { note ->
                 PaperNoteCard(
@@ -151,8 +154,9 @@ fun PaperScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // 底部无需额外留白：底栏本身是悬浮层
-            Spacer(Modifier.height(12.dp))
+            // 滚到底时最后一张要停在悬浮底栏上方，
+            // 中途滚动仍可从底栏下方穿过
+            Spacer(Modifier.height(ScrollEndInset))
         }
 
         // ---- 长按唤起的 tooltip ----
