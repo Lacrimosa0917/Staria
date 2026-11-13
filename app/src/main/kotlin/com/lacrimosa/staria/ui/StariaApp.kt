@@ -47,7 +47,6 @@ import com.lacrimosa.staria.ui.component.ScrollEdgeGap
 import com.lacrimosa.staria.ui.component.StariaBottomBar
 import com.lacrimosa.staria.ui.component.StariaTab
 import com.lacrimosa.staria.ui.home.HomeScreen
-import com.lacrimosa.staria.ui.placeholder.PlaceholderScreen
 import com.lacrimosa.staria.ui.paper.ExpandedNoteOverlay
 import com.lacrimosa.staria.ui.paper.PaperScreen
 import com.lacrimosa.staria.ui.profile.NicknameDialog
