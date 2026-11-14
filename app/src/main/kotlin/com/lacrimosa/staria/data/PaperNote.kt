@@ -68,12 +68,13 @@ object SampleData {
         )
     }
 
-    /** 个人主页展示的记录数量。接库后由仓储层提供，UI 无需改动。 */
-    val counts: RecordCounts = RecordCounts(
-        diary = 128,
-        paper = notes.size,
-        essay = 43,
-    )
+    /**
+     * 注意：个人主页的统计数字**不在这里**。
+     *
+     * 数量必须由根布局按当前三个列表实时计算（见 StariaApp 里的 ProfileDrawer），
+     * 否则新建、删除之后数字对不上。这里曾经放过一份写死的示例值（时间 128、
+     * 思索 43），已移除，避免再被误引用。
+     */
 
     /**
      * 日记占位数据，供时间页展示。

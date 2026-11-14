@@ -31,6 +31,7 @@ import com.lacrimosa.staria.data.EditKind
 import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
+import com.lacrimosa.staria.data.RecordCounts
 import com.lacrimosa.staria.data.SampleData
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
@@ -404,7 +405,14 @@ fun StariaApp() {
             ProfileDrawer(
                 visible = true,
                 nickname = nickname,
-                counts = SampleData.counts,
+                // 数量必须跟着当前三个列表走：新建、删除后要立刻对上，
+                // 不能再用 SampleData 里那份写死的示例值
+                counts = RecordCounts(
+                    // 与时间页一致：标记 deleted 的不计入
+                    diary = diaryEntries.count { !it.deleted },
+                    paper = paperNotes.size,
+                    essay = essays.size,
+                ),
                 onDismiss = { profileVisible = false },
                 onEditNickname = { editingNickname = true },
                 onOpenRecycleBin = { /* 星尘页后续接入 */ },
