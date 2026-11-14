@@ -11,6 +11,8 @@ data class DiaryEntry(
     val id: Long,
     val date: LocalDate,
     val title: String,
+    /** 日记正文。时间页展开卡片与编辑页共用。 */
+    val body: String = "",
     /** 首次删除后置为 true，移入星尘；时间页不再展示。 */
     val deleted: Boolean = false,
 )

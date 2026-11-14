@@ -150,13 +150,21 @@ fun DiaryTitleRow(
                     .border(1.dp, Hairline, RoundedCornerShape(14.dp))
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
-                // 正文占位：暂无内容字段
-                Text(
-                    text = "（日记正文）",
-                    color = InkMuted,
-                    fontSize = 13.sp,
-                    lineHeight = 22.sp,
-                )
+                // 正文为空时不占位，避免展开后只剩一片空白
+                if (entry.body.isNotBlank()) {
+                    Text(
+                        text = entry.body,
+                        color = Ink,
+                        fontSize = 14.sp,
+                        lineHeight = 24.sp,
+                    )
+                } else {
+                    Text(
+                        text = "还没有正文",
+                        color = InkMuted,
+                        fontSize = 13.sp,
+                    )
+                }
             }
         }
     }

@@ -1,0 +1,597 @@
+package com.lacrimosa.staria.ui.editor
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lacrimosa.staria.data.EditDraft
+import com.lacrimosa.staria.data.EditKind
+import com.lacrimosa.staria.ui.component.ActionTooltip
+import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.TooltipAction
+import com.lacrimosa.staria.ui.icon.IconClose
+import com.lacrimosa.staria.ui.icon.IconDiary
+import com.lacrimosa.staria.ui.icon.IconEssay
+import com.lacrimosa.staria.ui.icon.IconQuote
+import com.lacrimosa.staria.ui.icon.IconRedo
+import com.lacrimosa.staria.ui.icon.IconSave
+import com.lacrimosa.staria.ui.icon.IconUndo
+import com.lacrimosa.staria.ui.theme.HairLine
+import com.lacrimosa.staria.ui.theme.Ink
+import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PaperWhite
+import java.time.format.DateTimeFormatter
+
+private val Border = Color(0xFFE6E2DA)
+
+/** 圆形按键直径。保存 / 退出都用它，与查看页保持一致。 */
+private val ButtonSize = 38.dp
+
+/** 撤回重做胶囊的高度：与圆形按键同高（README：高度相同的胶囊）。 */
+private val CapsuleHeight = ButtonSize
+
+/** 胶囊内单个图标的触控宽度。 */
+private val CapsuleCellWidth = 36.dp
+
+/** 日期格式：与查看页统一。 */
+private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/M/d")
+
+/** 类型标签对应的展示文本。 */
+private fun EditKind.label(): String = when (this) {
+    EditKind.Diary -> "日记"
+    EditKind.Excerpt -> "摘录"
+    EditKind.Essay -> "随笔"
+}
+
+/** 类型标签对应的图标，用于切换类型的 tooltip。 */
+private fun EditKind.icon(): ImageVector = when (this) {
+    EditKind.Diary -> IconDiary
+    EditKind.Excerpt -> IconQuote
+    EditKind.Essay -> IconEssay
+}
+
+/**
+ * 编辑页（三种类型共用）。
+ *
+ * README 要求：
+ * - 左上角退出按键；有未保存修改时弹窗询问是否保存
+ * - 右上角圆形保存按钮，其左侧为同高胶囊，内含撤回与重做
+ * - 按钮与胶囊悬浮在内容之上，滚动时标题与正文整体滚动
+ * - 第一行左侧用刻本宋体显示当前类型
+ *   - 日记 / 随笔：该行右侧是标题输入
+ *   - 摘录：显示 from，右侧是来源输入
+ * - 长按类型文字弹出 tooltip，可切换类型
+ * - 第一行与正文之间以日期分割
+ * - 日记与摘录为普通文本；随笔为 markdown，边输入边预览
+ *
+ * 日期：三种类型都沿用创建时的日期，保存不刷新（用户确认的口径）。
+ */
+@Composable
+fun EditorScreen(
+    initial: EditDraft,
+    onExit: () -> Unit,
+    onSave: (EditDraft) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val history = remember(initial) {
+        TextHistory(title = initial.title, source = initial.source, body = initial.body)
+    }
+
+    var kind by remember(initial) { mutableStateOf(initial.kind) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+    var showKindTooltip by remember { mutableStateOf(false) }
+    var kindAnchor by remember { mutableStateOf(Offset.Zero) }
+
+    val bodyScroll = rememberScrollState()
+
+    // 修改过的判定：初始快照之外还有别的记录，或内容与初始不同
+    val dirty = history.isDirty()
+
+    fun requestExit() {
+        if (dirty) showDiscardDialog = true else onExit()
+    }
+
+    fun buildDraft(): EditDraft = initial.copy(
+        kind = kind,
+        title = history.title,
+        source = history.source,
+        body = history.body,
+        // 日期原样带回：三种类型都只写创建日期
+        date = initial.date,
+    )
+
+    // 系统返回键也走「未保存」拦截，行为与左上角退出键一致。
+    // 这里注册的处理器晚于根布局，因此会优先拿到返回事件。
+    androidx.activity.compose.BackHandler { requestExit() }
+
+    Box(modifier = modifier.fillMaxSize().background(PaperWhite)) {
+        // ---------- 内容层 ----------
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(bodyScroll)
+                .statusBarsPadding()
+                // 顶栏是悬浮的，内容顶部让出它的高度
+                .padding(top = ButtonSize + 28.dp),
+        ) {
+            // ---------- 第一行：类型 + 标题 / 来源 ----------
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = BarSidePadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 类型：刻本宋体，长按可切换
+                Text(
+                    text = kind.label(),
+                    modifier = Modifier
+                        .onGloballyPositioned { kindAnchor = it.positionInWindow() }
+                        .pointerInput(Unit) {
+                            detectTapGestures(onLongPress = { showKindTooltip = true })
+                        },
+                    fontFamily = KebenSong,
+                    fontSize = 16.sp,
+                    color = InkMuted,
+                )
+
+                if (kind == EditKind.Excerpt) {
+                    Text(
+                        text = "　from",
+                        fontFamily = KebenSong,
+                        fontSize = 16.sp,
+                        color = InkMuted,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    InlineField(
+                        value = history.source,
+                        placeholder = "来源",
+                        onValueChange = { history.editSource(it) },
+                        modifier = Modifier.weight(1f),
+                        textStyle = TextStyle(
+                            color = Ink,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        imeAction = ImeAction.Next,
+                    )
+                } else {
+                    Spacer(Modifier.width(8.dp))
+                    InlineField(
+                        value = history.title,
+                        placeholder = "标题",
+                        onValueChange = { history.editTitle(it) },
+                        modifier = Modifier.weight(1f),
+                        textStyle = TextStyle(
+                            color = Ink,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                        ),
+                        imeAction = ImeAction.Next,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // ---------- 日期分割 ----------
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = BarSidePadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = initial.date.format(DateFormatter),
+                    color = InkMuted,
+                    fontSize = 12.sp,
+                )
+                Spacer(Modifier.width(12.dp))
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(1.dp)
+                        .background(HairLine),
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            // ---------- 正文 ----------
+            // 随笔走 markdown 实时预览，其余两种是普通文本
+            BodyField(
+                value = history.body,
+                markdown = kind == EditKind.Essay,
+                onValueChange = { history.editBody(it) },
+            )
+
+            // 底部留白：滚到底时正文停在键盘/导航之上
+            Spacer(Modifier.height(120.dp))
+        }
+
+        // ---------- 左上角：退出 ----------
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = BarSidePadding, top = 14.dp),
+        ) {
+            CircleButton(
+                icon = IconClose,
+                description = "退出",
+                onClick = { requestExit() },
+            )
+        }
+
+        // ---------- 右上角：撤回重做胶囊 + 保存 ----------
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(end = BarSidePadding, top = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HistoryCapsule(
+                canUndo = history.canUndo,
+                canRedo = history.canRedo,
+                onUndo = { history.undo() },
+                onRedo = { history.redo() },
+            )
+            Spacer(Modifier.width(10.dp))
+            SaveButton(onClick = { onSave(buildDraft()) })
+        }
+    }
+
+    // ---------- 切换类型的 tooltip ----------
+    if (showKindTooltip) {
+        ActionTooltip(
+            anchor = kindAnchor,
+            actions = EditKind.entries
+                .filterNot { it == kind }
+                .map { target ->
+                    TooltipAction(
+                        label = "改为${target.label()}",
+                        icon = target.icon(),
+                        onClick = {
+                            showKindTooltip = false
+                            kind = target
+                        },
+                    )
+                },
+            onDismiss = { showKindTooltip = false },
+        )
+    }
+
+    // ---------- 未保存确认 ----------
+    if (showDiscardDialog) {
+        UnsavedChangesDialog(
+            onCancel = { showDiscardDialog = false },
+            onDiscard = onExit,
+            onSave = {
+                showDiscardDialog = false
+                onSave(buildDraft())
+            },
+        )
+    }
+}
+
+/** 单行内联输入框（标题 / 来源）。 */
+@Composable
+private fun InlineField(
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    textStyle: TextStyle,
+    imeAction: ImeAction,
+) {
+    Box(modifier = modifier) {
+        if (value.isEmpty()) {
+            Text(text = placeholder, color = InkMuted.copy(alpha = 0.7f), fontSize = 16.sp)
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = textStyle,
+            singleLine = true,
+            cursorBrush = SolidColor(Ink),
+            keyboardOptions = KeyboardOptions(imeAction = imeAction),
+        )
+    }
+}
+
+/**
+ * 正文输入区。
+ *
+ * [markdown] 为 true 时套上 [MarkdownTransformation]：
+ * 输入 `# ` 后该行立刻变成标题样式，并且 `#` 与空格被隐藏。
+ */
+@Composable
+private fun BodyField(
+    value: String,
+    markdown: Boolean,
+    onValueChange: (String) -> Unit,
+) {
+    val transformation = remember { MarkdownTransformation() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = BarSidePadding),
+    ) {
+        if (value.isEmpty()) {
+            Text(
+                text = if (markdown) "写点什么，# 开头是标题" else "写点什么",
+                color = InkMuted.copy(alpha = 0.6f),
+                fontSize = 15.sp,
+                lineHeight = 28.sp,
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = TextStyle(color = Ink, fontSize = 15.sp, lineHeight = 28.sp),
+            cursorBrush = SolidColor(Ink),
+            visualTransformation = if (markdown) transformation else VisualTransformation.None,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+        )
+    }
+}
+
+/** 撤回重做胶囊。 */
+@Composable
+private fun HistoryCapsule(
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .height(CapsuleHeight)
+            .background(PaperWhite, RoundedCornerShape(CapsuleHeight / 2))
+            .border(1.dp, Border, RoundedCornerShape(CapsuleHeight / 2)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        CapsuleIcon(
+            icon = IconUndo,
+            description = "撤回",
+            enabled = canUndo,
+            onClick = onUndo,
+        )
+        CapsuleIcon(
+            icon = IconRedo,
+            description = "重做",
+            enabled = canRedo,
+            onClick = onRedo,
+        )
+    }
+}
+
+@Composable
+private fun CapsuleIcon(
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .width(CapsuleCellWidth)
+            .height(CapsuleHeight)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(17.dp),
+            // 不可用时压淡，让「有没有东西可撤回」一眼可见
+            tint = if (enabled) Ink else InkMuted.copy(alpha = 0.35f),
+        )
+    }
+}
+
+/** 圆形图标按键。 */
+@Composable
+private fun CircleButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(ButtonSize)
+            .background(PaperWhite, CircleShape)
+            .border(1.dp, Border, CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(17.dp),
+            tint = Ink,
+        )
+    }
+}
+
+/** 保存按键：实心墨色，与其它空心圆钮区分主次。 */
+@Composable
+private fun SaveButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(ButtonSize)
+            .background(Ink, CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = IconSave,
+            contentDescription = "保存",
+            modifier = Modifier.size(17.dp),
+            tint = PaperWhite,
+        )
+    }
+}
+
+/** 未保存时的询问弹窗。 */
+@Composable
+private fun UnsavedChangesDialog(
+    onCancel: () -> Unit,
+    onDiscard: () -> Unit,
+    onSave: () -> Unit,
+) {
+    DialogShell(onDismiss = onCancel) {
+        Text(
+            text = "内容尚未保存",
+            color = Ink,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "退出前是否保存这次的修改？",
+            color = InkMuted,
+            fontSize = 12.sp,
+            lineHeight = 18.sp,
+        )
+        Spacer(Modifier.height(18.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            DialogAction(label = "取消", onClick = onCancel)
+            Spacer(Modifier.width(8.dp))
+            DialogAction(label = "不保存", onClick = onDiscard)
+            Spacer(Modifier.width(8.dp))
+            DialogAction(label = "保存", primary = true, onClick = onSave)
+        }
+    }
+}
+
+/** 弹窗外壳：居中卡片 + 压暗背景。 */
+@Composable
+private fun DialogShell(
+    onDismiss: () -> Unit,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.32f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 40.dp)
+                    .fillMaxWidth()
+                    .background(PaperWhite, RoundedCornerShape(18.dp))
+                    .border(1.dp, Border, RoundedCornerShape(18.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {}
+                    .padding(horizontal = 22.dp, vertical = 20.dp),
+                content = content,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DialogAction(
+    label: String,
+    primary: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = if (primary) Ink else Color.Transparent,
+                shape = RoundedCornerShape(9.dp),
+            )
+            .then(
+                if (primary) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(9.dp)),
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+    ) {
+        Text(
+            text = label,
+            color = if (primary) PaperWhite else Ink,
+            fontSize = 14.sp,
+            fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
+        )
+    }
+}

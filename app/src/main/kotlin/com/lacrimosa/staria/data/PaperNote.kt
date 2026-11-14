@@ -79,21 +79,63 @@ object SampleData {
      * 日记占位数据，供时间页展示。
      *
      * 日期从今天往前铺，方便验证时间轴「靠下为最新日期」的排布。
+     * [DiaryEntry.body] 写实一点，方便验证展开卡片与编辑页的往返。
      */
     val diaryEntries: List<DiaryEntry> = run {
         val base = java.time.LocalDate.now()
         fun d(daysAgo: Long) = base.minusDays(daysAgo)
         listOf(
-            DiaryEntry(1, d(0), "今天的风很轻"),
-            DiaryEntry(2, d(1), "关于早起这件事"),
-            DiaryEntry(3, d(1), "晚上读完了《小王子》"),
-            DiaryEntry(4, d(3), "下雨天适合发呆"),
-            DiaryEntry(5, d(5), "换了新的台灯"),
-            DiaryEntry(6, d(8), "生日"),
-            DiaryEntry(7, d(8), "收到一封信"),
-            DiaryEntry(8, d(12), "第一次做手冲"),
-            DiaryEntry(9, d(20), "搬到新城市的第一周"),
-            DiaryEntry(10, d(35), "旧年的最后一天"),
+            DiaryEntry(
+                id = 1,
+                date = d(0),
+                title = "今天的风很轻",
+                body = "下班没有立刻回家，绕到河边走了二十分钟。风把梧桐叶翻得哗哗响，" +
+                    "声音像是有人在很远的地方说话。",
+            ),
+            DiaryEntry(
+                id = 2,
+                date = d(1),
+                title = "关于早起这件事",
+                body = "第七天。闹钟设在六点四十，前三天是靠意志力，这几天好像身体自己会醒了。",
+            ),
+            DiaryEntry(
+                id = 3,
+                date = d(1),
+                title = "晚上读完了《小王子》",
+                body = "这次读得慢。狐狸那几页反复看了两遍，写驯养的那一段还是很好。",
+            ),
+            DiaryEntry(id = 4, date = d(3), title = "下雨天适合发呆", body = "一整天没出门。"),
+            DiaryEntry(
+                id = 5,
+                date = d(5),
+                title = "换了新的台灯",
+                body = "暖光，比之前那盏柔和很多。看书的时候眼睛不再发酸。",
+            ),
+            DiaryEntry(id = 6, date = d(8), title = "生日", body = "今年没有特意过。"),
+            DiaryEntry(
+                id = 7,
+                date = d(8),
+                title = "收到一封信",
+                body = "手写的，纸有点厚度。已经很久没有人给我写信了。",
+            ),
+            DiaryEntry(
+                id = 8,
+                date = d(12),
+                title = "第一次做手冲",
+                body = "水温 92 度，闷蒸 30 秒。第一杯偏酸，第二杯好一些。",
+            ),
+            DiaryEntry(
+                id = 9,
+                date = d(20),
+                title = "搬到新城市的第一周",
+                body = "房间还是空的，晚上躺在床上能听见楼下的车声。",
+            ),
+            DiaryEntry(
+                id = 10,
+                date = d(35),
+                title = "旧年的最后一天",
+                body = "把这一年的票根都扔了，只留了一张。",
+            ),
         )
     }
 

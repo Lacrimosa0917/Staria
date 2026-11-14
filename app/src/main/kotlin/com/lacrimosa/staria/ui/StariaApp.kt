@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lacrimosa.staria.data.DiaryEntry
+import com.lacrimosa.staria.data.EditDraft
+import com.lacrimosa.staria.data.EditKind
 import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
@@ -46,6 +48,7 @@ import com.lacrimosa.staria.ui.component.LocalContentInsets
 import com.lacrimosa.staria.ui.component.ScrollEdgeGap
 import com.lacrimosa.staria.ui.component.StariaBottomBar
 import com.lacrimosa.staria.ui.component.StariaTab
+import com.lacrimosa.staria.ui.editor.EditorScreen
 import com.lacrimosa.staria.ui.home.HomeScreen
 import com.lacrimosa.staria.ui.paper.ExpandedNoteOverlay
 import com.lacrimosa.staria.ui.paper.PaperScreen
@@ -56,6 +59,13 @@ import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.think.EssayReaderPage
 import com.lacrimosa.staria.ui.think.ThinkScreen
 import com.lacrimosa.staria.ui.time.TimeScreen
+import java.time.LocalDate
+
+/**
+ * 生成新条目的 id：取现有最大值 + 1，避免与已有的示例数据撞号。
+ */
+private fun nextId(existing: Collection<Long>): Long =
+    (existing.maxOrNull() ?: 0L) + 1L
 
 /**
  * 应用根布局。
@@ -86,6 +96,10 @@ fun StariaApp() {
     // 随笔查看页（二级全屏页面）。非空时整页覆盖，底栏与头像不出现
     var readerEssay by remember { mutableStateOf<Essay?>(null) }
 
+    // 编辑页（二级全屏）。非空时覆盖一切，底栏、头像、抽屉都不出现。
+    // 新建与编辑共用：草稿里的 id 为空即新建。
+    var editDraft by remember { mutableStateOf<EditDraft?>(null) }
+
     // 日记数据：删除后从列表移除（时间页不再展示）
     var diaryEntries by remember { mutableStateOf(SampleData.diaryEntries) }
     // 纸条数据：首页卡片堆叠与纸条页共用
@@ -105,9 +119,14 @@ fun StariaApp() {
         selection.setOverlay(false)
     }
 
-    // 系统返回键的优先级：关闭随笔查看页 → 关展开卡片 → 退多选 → 交给系统
-    BackHandler(enabled = readerEssay != null || expandedNote != null || selection.isActive) {
+    // 系统返回键的优先级：关闭编辑页 → 关闭随笔查看页 → 关展开卡片 → 退多选 → 交给系统
+    BackHandler(
+        enabled = editDraft != null || readerEssay != null ||
+            expandedNote != null || selection.isActive,
+    ) {
         when {
+            // 编辑页有自己的未保存拦截，这里只做兜底：直接丢弃草稿
+            editDraft != null -> editDraft = null
             readerEssay != null -> readerEssay = null
             expandedNote != null -> {
                 expandedNote = null
@@ -138,6 +157,99 @@ fun StariaApp() {
             else -> Unit
         }
         selection.exit()
+    }
+
+    // ---------- 编辑页：新建 ----------
+    // 三种类型都从今天开始，日期此后不再变动
+    val onCreate: (CreateKind) -> Unit = { kind ->
+        collapseBar()
+        val today = LocalDate.now()
+        editDraft = EditDraft(
+            kind = when (kind) {
+                CreateKind.Diary -> EditKind.Diary
+                CreateKind.Excerpt -> EditKind.Excerpt
+                CreateKind.Essay -> EditKind.Essay
+            },
+            // id 为空即新建
+            id = null,
+            date = today,
+        )
+    }
+
+    // ---------- 编辑页：保存 ----------
+    // 日期一律沿用草稿里的创建日期，保存不刷新（用户确认的口径）
+    val onSaveDraft: (EditDraft) -> Unit = { draft ->
+        when (draft.kind) {
+            EditKind.Diary -> {
+                val existing = draft.id?.let { id -> diaryEntries.firstOrNull { it.id == id } }
+                if (existing == null) {
+                    diaryEntries = diaryEntries + DiaryEntry(
+                        id = nextId(diaryEntries.map { it.id }),
+                        date = draft.date,
+                        title = draft.title.ifBlank { "无题" },
+                        body = draft.body,
+                    )
+                } else {
+                    diaryEntries = diaryEntries.map {
+                        if (it.id == existing.id) {
+                            it.copy(
+                                title = draft.title.ifBlank { "无题" },
+                                body = draft.body,
+                            )
+                        } else {
+                            it
+                        }
+                    }
+                }
+            }
+
+            EditKind.Excerpt -> {
+                val existing = draft.id?.let { id -> paperNotes.firstOrNull { it.id == id } }
+                if (existing == null) {
+                    paperNotes = paperNotes + PaperNote(
+                        id = nextId(paperNotes.map { it.id }),
+                        text = draft.body,
+                        source = draft.source.ifBlank { null },
+                        editedOn = draft.date,
+                    )
+                } else {
+                    paperNotes = paperNotes.map {
+                        if (it.id == existing.id) {
+                            it.copy(
+                                text = draft.body,
+                                source = draft.source.ifBlank { null },
+                            )
+                        } else {
+                            it
+                        }
+                    }
+                }
+            }
+
+            EditKind.Essay -> {
+                val existing = draft.id?.let { id -> essays.firstOrNull { it.id == id } }
+                if (existing == null) {
+                    essays = essays + Essay(
+                        id = nextId(essays.map { it.id }),
+                        date = draft.date,
+                        title = draft.title.ifBlank { "无题" },
+                        body = draft.body,
+                    )
+                } else {
+                    essays = essays.map {
+                        if (it.id == existing.id) {
+                            it.copy(
+                                title = draft.title.ifBlank { "无题" },
+                                body = draft.body,
+                            )
+                        } else {
+                            it
+                        }
+                    }
+                }
+            }
+        }
+        editDraft = null
     }
 
     // 悬浮层的真实占位高度：必须把系统栏算进去。
@@ -192,6 +304,16 @@ fun StariaApp() {
                             selection = selection,
                             // README：操作该页时若底栏展开则自动收起
                             onUserInteract = collapseBar,
+                            onEdit = { entry: DiaryEntry ->
+                                // 进入编辑页时沿用该条的创建日期
+                                editDraft = EditDraft(
+                                    kind = EditKind.Diary,
+                                    id = entry.id,
+                                    date = entry.date,
+                                    title = entry.title,
+                                    body = entry.body,
+                                )
+                            },
                             onDelete = { entry: DiaryEntry ->
                                 diaryEntries = diaryEntries.filterNot { it.id == entry.id }
                             },
@@ -201,6 +323,15 @@ fun StariaApp() {
                             notes = paperNotes,
                             selection = selection,
                             onUserInteract = collapseBar,
+                            onEdit = { note: PaperNote ->
+                                editDraft = EditDraft(
+                                    kind = EditKind.Excerpt,
+                                    id = note.id,
+                                    date = note.editedOn,
+                                    source = note.source.orEmpty(),
+                                    body = note.text,
+                                )
+                            },
                             onDelete = { note: PaperNote ->
                                 paperNotes = paperNotes.filterNot { it.id == note.id }
                             },
@@ -214,6 +345,15 @@ fun StariaApp() {
                             essays = essays,
                             selection = selection,
                             onUserInteract = collapseBar,
+                            onEdit = { essay: Essay ->
+                                editDraft = EditDraft(
+                                    kind = EditKind.Essay,
+                                    id = essay.id,
+                                    date = essay.date,
+                                    title = essay.title,
+                                    body = essay.body,
+                                )
+                            },
                             onDelete = { essay: Essay ->
                                 essays = essays.filterNot { it.id == essay.id }
                             },
@@ -250,7 +390,7 @@ fun StariaApp() {
                 ),
             current = currentTab,
             onSelect = { currentTab = it },
-            onCreate = { _: CreateKind -> /* 编辑页后续接入 */ },
+            onCreate = onCreate,
             navExpanded = navExpanded,
             onNavExpandedChange = { navExpanded = it },
             createExpanded = createExpanded,
@@ -290,11 +430,31 @@ fun StariaApp() {
             EssayReaderPage(
                 essay = essay,
                 onBack = { readerEssay = null },
-                onEdit = { /* 编辑页后续接入 */ },
+                onEdit = {
+                    // 从查看页进入编辑：先收起查看页，编辑保存后回到列表
+                    readerEssay = null
+                    editDraft = EditDraft(
+                        kind = EditKind.Essay,
+                        id = essay.id,
+                        date = essay.date,
+                        title = essay.title,
+                        body = essay.body,
+                    )
+                },
                 onDelete = {
                     essays = essays.filterNot { it.id == essay.id }
                     readerEssay = null
                 },
+            )
+        }
+
+        // ---------- 编辑页（二级全屏） ----------
+        // 声明在最后，压在查看页之上：从随笔查看页点编辑能直接进入
+        editDraft?.let { draft ->
+            EditorScreen(
+                initial = draft,
+                onExit = { editDraft = null },
+                onSave = onSaveDraft,
             )
         }
     }

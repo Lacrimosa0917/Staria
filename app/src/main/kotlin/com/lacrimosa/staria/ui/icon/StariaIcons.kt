@@ -264,6 +264,61 @@ val IconChecklist: ImageVector by lazy {
     }
 }
 
+/** 撤回：向左回卷的箭头。 */
+val IconUndo: ImageVector by lazy {
+    build("Undo") {
+        // 箭头
+        moveTo(8.8f, 6.2f)
+        lineTo(4.4f, 10.6f)
+        lineTo(8.8f, 15f)
+        // 回卷的钩
+        moveTo(4.4f, 10.6f)
+        lineTo(13.2f, 10.6f)
+        curveTo(16.8f, 10.6f, 19.6f, 13.2f, 19.6f, 16.4f)
+        curveTo(19.6f, 18.2f, 18.8f, 19.6f, 17.6f, 20.4f)
+    }
+}
+
+/** 重做：撤回的左右镜像。 */
+val IconRedo: ImageVector by lazy {
+    build("Redo") {
+        moveTo(15.2f, 6.2f)
+        lineTo(19.6f, 10.6f)
+        lineTo(15.2f, 15f)
+        moveTo(19.6f, 10.6f)
+        lineTo(10.8f, 10.6f)
+        curveTo(7.2f, 10.6f, 4.4f, 13.2f, 4.4f, 16.4f)
+        curveTo(4.4f, 18.2f, 5.2f, 19.6f, 6.4f, 20.4f)
+    }
+}
+
+/** 保存：箭头落入托盘。 */
+val IconSave: ImageVector by lazy {
+    build("Save") {
+        // 托盘
+        moveTo(4.8f, 15.2f)
+        lineTo(4.8f, 19.4f)
+        lineTo(19.2f, 19.4f)
+        lineTo(19.2f, 15.2f)
+        // 下落的箭头
+        moveTo(12f, 4.4f)
+        lineTo(12f, 14f)
+        moveTo(7.8f, 9.8f)
+        lineTo(12f, 14f)
+        lineTo(16.2f, 9.8f)
+    }
+}
+
+/** 关闭：叉。编辑页的退出按键使用。 */
+val IconClose: ImageVector by lazy {
+    build("Close") {
+        moveTo(6.6f, 6.6f)
+        lineTo(17.4f, 17.4f)
+        moveTo(17.4f, 6.6f)
+        lineTo(6.6f, 17.4f)
+    }
+}
+
 /**
  * 更多：三个圆点。
  *
