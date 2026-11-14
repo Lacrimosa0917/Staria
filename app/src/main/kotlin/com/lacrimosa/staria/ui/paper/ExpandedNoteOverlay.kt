@@ -19,18 +19,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.PaperNote
+import com.lacrimosa.staria.ui.theme.BorderOnCard
 import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
-
-private val Hairline = Color(0xFFE8E4DC)
+import com.lacrimosa.staria.ui.theme.Scrim
 
 /**
  * 纸条展开浮层。
@@ -48,7 +48,7 @@ fun ExpandedNoteOverlay(
         modifier = Modifier
             .fillMaxSize()
             // 压暗其余内容
-            .background(Color.Black.copy(alpha = 0.32f))
+            .background(Scrim)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -69,8 +69,8 @@ fun ExpandedNoteOverlay(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) {}
-                    .background(CardPaper, RoundedCornerShape(14.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(14.dp)),
+                    .background(CardPaper, RoundedCornerShape(CardRadius))
+                    .border(1.dp, BorderOnCard, RoundedCornerShape(CardRadius)),
             ) {
                 Column(
                     modifier = Modifier

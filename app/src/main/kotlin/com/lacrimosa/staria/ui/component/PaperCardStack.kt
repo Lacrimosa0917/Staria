@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -42,13 +41,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.MAX_STACKED_NOTES
 import com.lacrimosa.staria.data.PaperNote
+import com.lacrimosa.staria.ui.theme.BorderOnCard
 import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import kotlin.math.hypot
 import kotlin.math.tanh
 
-private val CardHairline = Color(0xFFE8E4DC)
 private val SwapEasing = CubicBezierEasing(0.22f, 0.77f, 0.23f, 1f)
 
 /** 与参考实现一致的橡皮筋：160 * tanh(delta / 160)。 */
@@ -225,9 +225,9 @@ fun PaperCardStack(
                                 Modifier
                             },
                         ),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(CardRadius),
                     color = CardPaper,
-                    border = BorderStroke(1.dp, CardHairline),
+                    border = BorderStroke(1.dp, BorderOnCard),
                     shadowElevation = if (isFront) 10.dp else 3.dp,
                 ) {
                     // 文字只在前排完全显示：后排只露出纸边，可避免错开的边缘

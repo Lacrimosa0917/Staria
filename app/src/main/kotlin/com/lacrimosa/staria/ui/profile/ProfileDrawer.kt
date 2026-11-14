@@ -28,8 +28,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,14 +37,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.RecordCounts
 import com.lacrimosa.staria.ui.icon.IconChevronRight
+import com.lacrimosa.staria.ui.icon.IconSettings
+import com.lacrimosa.staria.ui.icon.IconStarDust
+import androidx.compose.material3.Icon
+import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PanelRadius
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import androidx.compose.material3.Icon
-
-private val Hairline = Color(0xFFE6E2DA)
+import androidx.compose.ui.graphics.vector.ImageVector
 
 /** 抽屉占屏宽比例（README：占屏幕左侧四分之三）。 */
 private const val DRAWER_FRACTION = 0.75f
@@ -136,13 +139,21 @@ fun ProfileDrawer(
 
                     Spacer(Modifier.height(20.dp))
 
-                    EntryRow(label = "星尘", onClick = onOpenRecycleBin)
+                    EntryRow(
+                        label = "星尘",
+                        icon = IconStarDust,
+                        onClick = onOpenRecycleBin,
+                    )
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 28.dp, end = 28.dp),
                         thickness = 1.dp,
-                        color = Hairline,
+                        color = Border,
                     )
-                    EntryRow(label = "设置", onClick = onOpenSettings)
+                    EntryRow(
+                        label = "设置",
+                        icon = IconSettings,
+                        onClick = onOpenSettings,
+                    )
                 }
             }
         }
@@ -195,8 +206,8 @@ private fun CountsCard(counts: RecordCounts) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .background(CardPaper, RoundedCornerShape(16.dp))
-            .border(1.dp, Hairline, RoundedCornerShape(16.dp))
+            .background(CardPaper, RoundedCornerShape(PanelRadius))
+            .border(1.dp, Border, RoundedCornerShape(PanelRadius))
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -236,9 +247,15 @@ private fun CountRow(label: String, value: Int, unit: String) {
     }
 }
 
+/**
+ * 一行入口：图标 + 文字 + 右箭头。
+ *
+ * ICON.md「个人主页」：图标显示在选项文字左侧。
+ */
 @Composable
 private fun EntryRow(
     label: String,
+    icon: ImageVector,
     onClick: () -> Unit,
 ) {
     Row(
@@ -252,6 +269,13 @@ private fun EntryRow(
             .padding(horizontal = 28.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = Ink,
+        )
+        Spacer(Modifier.size(10.dp))
         Text(
             text = label,
             modifier = Modifier.weight(1f),

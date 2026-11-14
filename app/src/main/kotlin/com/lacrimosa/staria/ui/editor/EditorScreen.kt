@@ -32,8 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,21 +53,24 @@ import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconClose
 import com.lacrimosa.staria.ui.icon.IconDiary
 import com.lacrimosa.staria.ui.icon.IconEssay
-import com.lacrimosa.staria.ui.icon.IconQuote
+import com.lacrimosa.staria.ui.icon.IconExcerpt
 import com.lacrimosa.staria.ui.icon.IconRedo
 import com.lacrimosa.staria.ui.icon.IconSave
 import com.lacrimosa.staria.ui.icon.IconUndo
+import java.time.format.DateTimeFormatter
+import com.lacrimosa.staria.ui.theme.ActionRadius
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.HairLine
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import java.time.format.DateTimeFormatter
-
-private val Border = Color(0xFFE6E2DA)
+import com.lacrimosa.staria.ui.theme.Scrim
+import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
 
 /** 圆形按键直径。保存 / 退出都用它，与查看页保持一致。 */
-private val ButtonSize = 38.dp
+private val ButtonSize = SecondaryButtonSize
 
 /** 撤回重做胶囊的高度：与圆形按键同高（README：高度相同的胶囊）。 */
 private val CapsuleHeight = ButtonSize
@@ -88,7 +91,7 @@ private fun EditKind.label(): String = when (this) {
 /** 类型标签对应的图标，用于切换类型的 tooltip。 */
 private fun EditKind.icon(): ImageVector = when (this) {
     EditKind.Diary -> IconDiary
-    EditKind.Excerpt -> IconQuote
+    EditKind.Excerpt -> IconExcerpt
     EditKind.Essay -> IconEssay
 }
 
@@ -540,7 +543,7 @@ private fun DialogShell(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.32f))
+                .background(Scrim)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -552,8 +555,8 @@ private fun DialogShell(
                 modifier = Modifier
                     .padding(horizontal = 40.dp)
                     .fillMaxWidth()
-                    .background(PaperWhite, RoundedCornerShape(18.dp))
-                    .border(1.dp, Border, RoundedCornerShape(18.dp))
+                    .background(PaperWhite, RoundedCornerShape(DialogRadius))
+                    .border(1.dp, Border, RoundedCornerShape(DialogRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -575,10 +578,10 @@ private fun DialogAction(
         modifier = Modifier
             .background(
                 color = if (primary) Ink else Color.Transparent,
-                shape = RoundedCornerShape(9.dp),
+                shape = RoundedCornerShape(ActionRadius),
             )
             .then(
-                if (primary) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(9.dp)),
+                if (primary) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(ActionRadius)),
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

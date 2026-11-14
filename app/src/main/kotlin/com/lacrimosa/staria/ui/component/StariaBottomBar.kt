@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -43,34 +42,47 @@ import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.R
 import com.lacrimosa.staria.ui.icon.IconDiary
 import com.lacrimosa.staria.ui.icon.IconEssay
+import com.lacrimosa.staria.ui.icon.IconExcerpt
 import com.lacrimosa.staria.ui.icon.IconHome
+import com.lacrimosa.staria.ui.icon.IconHomeSelected
 import com.lacrimosa.staria.ui.icon.IconHourglass
+import com.lacrimosa.staria.ui.icon.IconHourglassSelected
+import com.lacrimosa.staria.ui.icon.IconNotebook
+import com.lacrimosa.staria.ui.icon.IconNotebookSelected
 import com.lacrimosa.staria.ui.icon.IconPaperStack
+import com.lacrimosa.staria.ui.icon.IconPaperStackSelected
 import com.lacrimosa.staria.ui.icon.IconPlus
-import com.lacrimosa.staria.ui.icon.IconQuill
-import com.lacrimosa.staria.ui.icon.IconQuote
 import com.lacrimosa.staria.ui.icon.IconTrash
+import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.PaperWhite
 
-/** 底栏四个页面。 */
-enum class StariaTab(val labelRes: Int, val icon: ImageVector) {
-    Home(R.string.tab_home, IconHome),
-    Time(R.string.tab_time, IconHourglass),
-    Paper(R.string.tab_paper, IconPaperStack),
-    Think(R.string.tab_think, IconQuill),
+/**
+ * 底栏四个页面。
+ *
+ * [icon] 是未选中时的线性图标，[selectedIcon] 是选中时的填充图标
+ * （ICON.md：选中的页面图标使用填充，未选中的使用线性）。
+ */
+enum class StariaTab(
+    val labelRes: Int,
+    val icon: ImageVector,
+    val selectedIcon: ImageVector,
+) {
+    Home(R.string.tab_home, IconHome, IconHomeSelected),
+    Time(R.string.tab_time, IconHourglass, IconHourglassSelected),
+    Paper(R.string.tab_paper, IconPaperStack, IconPaperStackSelected),
+    Think(R.string.tab_think, IconNotebook, IconNotebookSelected),
 }
 
 /** 新建菜单三项。 */
 enum class CreateKind(val labelRes: Int, val icon: ImageVector) {
     Diary(R.string.create_diary, IconDiary),
-    Excerpt(R.string.create_excerpt, IconQuote),
+    Excerpt(R.string.create_excerpt, IconExcerpt),
     Essay(R.string.create_essay, IconEssay),
 }
-
-private val Hairline = Color(0xFFE6E2DA)
 
 /** 底栏高度。新建按钮直径与之相等，两者底边对齐后高度完全一致。 */
 private val CapsuleHeight = 58.dp
@@ -187,7 +199,7 @@ private fun DeleteButton(
     Box(
         modifier = modifier
             .size(CreateButtonSize)
-            .background(DestructiveRed, CircleShape)
+            .background(Danger, CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -233,7 +245,7 @@ private fun NavCapsule(
             .width(width)
             .height(CapsuleHeight)
             .background(PaperWhite, shape)
-            .border(BorderStroke(1.dp, Hairline), shape)
+            .border(BorderStroke(1.dp, Border), shape)
             .clip(shape)
             .padding(horizontal = CapsuleHPad),
         verticalAlignment = Alignment.CenterVertically,
@@ -279,7 +291,8 @@ private fun NavItem(
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = tab.icon,
+            // ICON.md：选中的页面图标使用填充，未选中的使用线性
+            imageVector = if (selected) tab.selectedIcon else tab.icon,
             contentDescription = stringResource(tab.labelRes),
             modifier = Modifier.size(20.dp),
             tint = if (selected) Ink else InkMuted,
@@ -334,7 +347,7 @@ private fun CreateButton(
                     }
                     .size(actionSize)
                     .background(CardPaper, CircleShape)
-                    .border(BorderStroke(1.dp, Hairline), CircleShape)
+                    .border(BorderStroke(1.dp, Border), CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -359,7 +372,7 @@ private fun CreateButton(
             modifier = Modifier
                 .size(CreateButtonSize)
                 .background(PaperWhite, CircleShape)
-                .border(BorderStroke(1.dp, Hairline), CircleShape)
+                .border(BorderStroke(1.dp, Border), CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

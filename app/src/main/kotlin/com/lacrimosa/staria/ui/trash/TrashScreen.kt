@@ -32,8 +32,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -46,32 +46,41 @@ import com.lacrimosa.staria.data.TrashItem
 import com.lacrimosa.staria.data.TrashKind
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
-import com.lacrimosa.staria.ui.component.DestructiveRed
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconChecklist
-import com.lacrimosa.staria.ui.icon.IconChevronLeft
+import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconTrash
-import com.lacrimosa.staria.ui.icon.IconUndo
+import com.lacrimosa.staria.ui.icon.IconRestore
+import java.time.format.DateTimeFormatter
+import com.lacrimosa.staria.ui.theme.ActionRadius
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.BorderDisabled
+import com.lacrimosa.staria.ui.theme.BorderSelected
 import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.CardRadius
+import com.lacrimosa.staria.ui.theme.Danger
+import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import java.time.format.DateTimeFormatter
-
-private val Border = Color(0xFFE6E2DA)
+import com.lacrimosa.staria.ui.theme.Scrim
+import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
+import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
+import com.lacrimosa.staria.ui.theme.SelectionBoxSize
+import com.lacrimosa.staria.ui.theme.SelectionShift
 
 /** 日期格式：与查看页统一。 */
 private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/M/d")
 
 /** 圆形按键直径：与其它二级页保持一致。 */
-private val ButtonSize = 38.dp
+private val ButtonSize = SecondaryButtonSize
 
 /** 卡片高度固定（README：等宽等高），正文只显示一行。 */
 private val CardHeight = 84.dp
 
 /** 多选时内容右移的距离（为左侧选中框让位）。 */
-private val SelectShift = 26.dp
+private val SelectShift = SelectionShift
 
 /**
  * 星尘（回收站）。
@@ -178,7 +187,7 @@ fun TrashScreen(
                 .padding(start = BarSidePadding, top = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            CircleButton(icon = IconChevronLeft, description = "返回", onClick = onBack)
+            CircleButton(icon = IconBack, description = "返回", onClick = onBack)
             Spacer(Modifier.width(14.dp))
             Text(
                 text = "星尘",
@@ -201,7 +210,7 @@ fun TrashScreen(
             ) {
                 PillButton(
                     label = "恢复",
-                    icon = IconUndo,
+                    icon = IconRestore,
                     enabled = selected.isNotEmpty(),
                     onClick = { pendingRestore = true },
                 )
@@ -222,7 +231,7 @@ fun TrashScreen(
             actions = listOf(
                 TooltipAction(
                     label = "恢复",
-                    icon = IconUndo,
+                    icon = IconRestore,
                     onClick = {
                         tooltipItem = null
                         onRestore(listOf(item.trashId))
@@ -311,8 +320,8 @@ private fun TrashCard(
             .padding(horizontal = BarSidePadding)
             .height(CardHeight)
             .onGloballyPositioned { windowOrigin = it.positionInWindow() }
-            .background(CardPaper, RoundedCornerShape(14.dp))
-            .border(1.dp, Border, RoundedCornerShape(14.dp))
+            .background(CardPaper, RoundedCornerShape(CardRadius))
+            .border(1.dp, Border, RoundedCornerShape(CardRadius))
             // 点击与长按必须在同一个 detectTapGestures 里
             .pointerInput(selectionMode) {
                 detectTapGestures(
@@ -363,12 +372,12 @@ private fun TrashCard(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .size(17.dp)
+                    .size(SelectionBoxSize)
                     .then(
                         if (selected) {
-                            Modifier.background(Ink, RoundedCornerShape(4.dp))
+                            Modifier.background(Ink, RoundedCornerShape(SelectionBoxRadius))
                         } else {
-                            Modifier.border(1.dp, Color(0xFFC9C3B8), RoundedCornerShape(4.dp))
+                            Modifier.border(1.dp, BorderSelected, RoundedCornerShape(SelectionBoxRadius))
                         },
                     ),
                 contentAlignment = Alignment.Center,
@@ -420,7 +429,7 @@ private fun CircleButton(
         Icon(
             imageVector = icon,
             contentDescription = description,
-            modifier = Modifier.size(17.dp),
+            modifier = Modifier.size(SelectionBoxSize),
             tint = Ink,
         )
     }
@@ -475,7 +484,7 @@ private fun CircleActionButton(
         modifier = Modifier
             .size(ButtonSize)
             .background(
-                if (enabled) DestructiveRed else Color(0xFFD8D4CC),
+                if (enabled) Danger else BorderDisabled,
                 CircleShape,
             )
             .clickable(
@@ -489,7 +498,7 @@ private fun CircleActionButton(
         Icon(
             imageVector = icon,
             contentDescription = description,
-            modifier = Modifier.size(17.dp),
+            modifier = Modifier.size(SelectionBoxSize),
             tint = PaperWhite,
         )
     }
@@ -512,7 +521,7 @@ private fun ConfirmDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.32f))
+                .background(Scrim)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -524,8 +533,8 @@ private fun ConfirmDialog(
                 modifier = Modifier
                     .padding(horizontal = 40.dp)
                     .fillMaxWidth()
-                    .background(PaperWhite, RoundedCornerShape(18.dp))
-                    .border(1.dp, Border, RoundedCornerShape(18.dp))
+                    .background(PaperWhite, RoundedCornerShape(DialogRadius))
+                    .border(1.dp, Border, RoundedCornerShape(DialogRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -576,13 +585,13 @@ private fun DialogButton(
             .background(
                 color = when {
                     !primary -> Color.Transparent
-                    destructive -> DestructiveRed
+                    destructive -> Danger
                     else -> Ink
                 },
-                shape = RoundedCornerShape(9.dp),
+                shape = RoundedCornerShape(ActionRadius),
             )
             .then(
-                if (primary) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(9.dp)),
+                if (primary) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(ActionRadius)),
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

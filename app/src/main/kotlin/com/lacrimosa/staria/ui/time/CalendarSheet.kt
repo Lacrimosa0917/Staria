@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,14 +33,17 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lacrimosa.staria.ui.icon.IconChevronLeft
 import com.lacrimosa.staria.ui.icon.IconChevronRight
+import java.time.LocalDate
+import java.time.YearMonth
+import com.lacrimosa.staria.ui.theme.ChipBackground
+import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import java.time.LocalDate
-import java.time.YearMonth
+import com.lacrimosa.staria.ui.theme.Scrim
+import com.lacrimosa.staria.ui.theme.Border
 
-private val Hairline = Color(0xFFE6E2DA)
 private val WeekLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
 /**
@@ -64,7 +66,7 @@ fun CalendarSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.32f))
+                .background(Scrim)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -76,8 +78,8 @@ fun CalendarSheet(
                 modifier = Modifier
                     .padding(horizontal = 32.dp)
                     .fillMaxWidth()
-                    .background(PaperWhite, RoundedCornerShape(18.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(18.dp))
+                    .background(PaperWhite, RoundedCornerShape(DialogRadius))
+                    .border(1.dp, Border, RoundedCornerShape(DialogRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -201,7 +203,7 @@ private fun MonthArrow(
     Box(
         modifier = Modifier
             .size(28.dp)
-            .background(Color(0xFFF3F0EA), CircleShape)
+            .background(ChipBackground, CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

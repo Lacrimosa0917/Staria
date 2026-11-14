@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -36,14 +35,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.DiaryEntry
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.BorderSelected
 import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
-
-private val Hairline = Color(0xFFE6E2DA)
+import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
+import com.lacrimosa.staria.ui.theme.SelectionBoxSize
+import com.lacrimosa.staria.ui.theme.SelectionShift
 
 /** 多选模式下标题整体左移的距离（为左侧选中框让位）。 */
-private val SelectShift = 26.dp
+private val SelectShift = SelectionShift
 
 /**
  * 一行标题。点击展开为卡片（README：点击该行展开为卡片展示）。
@@ -116,12 +119,12 @@ fun DiaryTitleRow(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .padding(start = 2.dp)
-                        .size(17.dp)
+                        .size(SelectionBoxSize)
                         .then(
                             if (selected) {
-                                Modifier.background(Ink, RoundedCornerShape(4.dp))
+                                Modifier.background(Ink, RoundedCornerShape(SelectionBoxRadius))
                             } else {
-                                Modifier.border(1.dp, Color(0xFFC9C3B8), RoundedCornerShape(4.dp))
+                                Modifier.border(1.dp, BorderSelected, RoundedCornerShape(SelectionBoxRadius))
                             },
                         ),
                     contentAlignment = Alignment.Center,
@@ -146,8 +149,8 @@ fun DiaryTitleRow(
                     .fillMaxWidth()
                     .padding(start = shift)
                     .padding(bottom = 10.dp)
-                    .background(CardPaper, RoundedCornerShape(14.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(14.dp))
+                    .background(CardPaper, RoundedCornerShape(CardRadius))
+                    .border(1.dp, Border, RoundedCornerShape(CardRadius))
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
                 // 正文为空时不占位，避免展开后只剩一片空白

@@ -25,9 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
@@ -38,12 +38,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lacrimosa.staria.data.NICKNAME_MAX_WEIGHT
 import com.lacrimosa.staria.data.nicknameWeight
+import com.lacrimosa.staria.ui.theme.ActionRadius
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.BorderDisabled
+import com.lacrimosa.staria.ui.theme.Danger
+import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.InputBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
-
-private val Hairline = Color(0xFFE6E2DA)
-private val DangerRed = Color(0xFFD93A3A)
+import com.lacrimosa.staria.ui.theme.Scrim
 
 /**
  * 修改昵称浮窗（README：包含取消与确定两个选项）。
@@ -74,7 +78,7 @@ fun NicknameDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.32f))
+                .background(Scrim)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -86,8 +90,8 @@ fun NicknameDialog(
                 modifier = Modifier
                     .padding(horizontal = 40.dp)
                     .fillMaxWidth()
-                    .background(PaperWhite, RoundedCornerShape(18.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(18.dp))
+                    .background(PaperWhite, RoundedCornerShape(DialogRadius))
+                    .border(1.dp, Border, RoundedCornerShape(DialogRadius))
                     // 阻止点击穿透到遮罩
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -109,11 +113,11 @@ fun NicknameDialog(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .background(Color(0xFFFAF8F5), RoundedCornerShape(10.dp))
+                            .background(InputBackground, RoundedCornerShape(ActionRadius))
                             .border(
                                 width = 1.dp,
-                                color = if (overLimit) DangerRed else Hairline,
-                                shape = RoundedCornerShape(10.dp),
+                                color = if (overLimit) Danger else Border,
+                                shape = RoundedCornerShape(ActionRadius),
                             )
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                     ) {
@@ -142,7 +146,7 @@ fun NicknameDialog(
 
                     Text(
                         text = "$used/$NICKNAME_MAX_WEIGHT",
-                        color = if (overLimit) DangerRed else InkMuted,
+                        color = if (overLimit) Danger else InkMuted,
                         fontSize = 12.sp,
                         fontWeight = if (overLimit) FontWeight.Medium else FontWeight.Normal,
                     )
@@ -188,7 +192,7 @@ private fun DialogAction(
     // 不可用时整体压成全灰，避免和「可用的黑色主按钮」混淆
     val bg = when {
         !primary -> Color.Transparent
-        !enabled -> Color(0xFFD8D4CC)
+        !enabled -> BorderDisabled
         else -> Ink
     }
     val fg = when {
@@ -200,10 +204,10 @@ private fun DialogAction(
 
     Box(
         modifier = Modifier
-            .background(bg, RoundedCornerShape(9.dp))
+            .background(bg, RoundedCornerShape(ActionRadius))
             .then(
                 if (primary) Modifier
-                else Modifier.border(1.dp, Hairline, RoundedCornerShape(9.dp)),
+                else Modifier.border(1.dp, Border, RoundedCornerShape(ActionRadius)),
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

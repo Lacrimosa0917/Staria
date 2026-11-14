@@ -31,7 +31,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
@@ -43,19 +42,22 @@ import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconCheck
-import com.lacrimosa.staria.ui.icon.IconChevronLeft
+import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconChevronRight
 import com.lacrimosa.staria.ui.icon.IconDotPlaceholder
+import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PanelRadius
 import com.lacrimosa.staria.ui.theme.PaperWhite
-
-private val Border = Color(0xFFE6E2DA)
+import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
+import com.lacrimosa.staria.ui.theme.SecondaryTopBarPad
+import androidx.compose.ui.graphics.Color
 
 /** 圆形按键直径。 */
-private val ButtonSize = 38.dp
+private val ButtonSize = SecondaryButtonSize
 
 /** 色块直径。 */
 private val SwatchSize = 40.dp
@@ -101,8 +103,8 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = BarSidePadding)
-                    .background(CardPaper, RoundedCornerShape(16.dp))
-                    .border(1.dp, Border, RoundedCornerShape(16.dp))
+                    .background(CardPaper, RoundedCornerShape(PanelRadius))
+                    .border(1.dp, Border, RoundedCornerShape(PanelRadius))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 // 当前：颜色名
@@ -154,8 +156,8 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = BarSidePadding)
-                    .background(CardPaper, RoundedCornerShape(16.dp))
-                    .border(1.dp, Border, RoundedCornerShape(16.dp))
+                    .background(CardPaper, RoundedCornerShape(PanelRadius))
+                    .border(1.dp, Border, RoundedCornerShape(PanelRadius))
                     .onGloballyPositioned { darkAnchor = it.positionInWindow() }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -198,7 +200,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
-                .padding(start = BarSidePadding, top = 14.dp),
+                .padding(start = BarSidePadding, top = SecondaryTopBarPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -214,7 +216,7 @@ fun SettingsScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = IconChevronLeft,
+                    imageVector = IconBack,
                     contentDescription = "返回",
                     modifier = Modifier.size(17.dp),
                     tint = Ink,

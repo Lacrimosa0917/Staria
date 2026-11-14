@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -47,18 +46,23 @@ import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
 import com.lacrimosa.staria.ui.selection.SelectionState
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.BorderSelected
+import com.lacrimosa.staria.ui.theme.CardGap
 import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
+import com.lacrimosa.staria.ui.theme.SelectionBoxSize
+import com.lacrimosa.staria.ui.theme.SelectionShift
 import java.time.format.DateTimeFormatter
-
-private val Hairline = Color(0xFFE6E2DA)
 
 /** 卡片日期格式：精确至日。 */
 private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/M/d")
 
 /** 多选时日期右移的距离（为左侧选中框让位）。 */
-private val SelectShift = 26.dp
+private val SelectShift = SelectionShift
 
 /**
  * 纸条（摘录查看页）。
@@ -151,7 +155,7 @@ fun PaperScreen(
                         }
                     },
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(CardGap))
             }
 
             // 滚到底时最后一张停在悬浮底栏之上（含导航栏高度）
@@ -224,8 +228,8 @@ private fun PaperNoteCard(
                 windowOrigin = coords.positionInWindow()
             }
             // 卡片底色略深于纯白背景，但不影响阅读
-            .background(CardPaper, RoundedCornerShape(14.dp))
-            .border(1.dp, Hairline, RoundedCornerShape(14.dp))
+            .background(CardPaper, RoundedCornerShape(CardRadius))
+            .border(1.dp, Border, RoundedCornerShape(CardRadius))
             // 点击与长按放在同一个 detectTapGestures 里：
             // 拆成两个 modifier 时内层会先消费按下事件，导致另一种手势失效
             .pointerInput(selectionMode) {
@@ -289,12 +293,12 @@ private fun PaperNoteCard(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .size(17.dp)
+                    .size(SelectionBoxSize)
                     .then(
                         if (selected) {
-                            Modifier.background(Ink, RoundedCornerShape(4.dp))
+                            Modifier.background(Ink, RoundedCornerShape(SelectionBoxRadius))
                         } else {
-                            Modifier.border(1.dp, Color(0xFFC9C3B8), RoundedCornerShape(4.dp))
+                            Modifier.border(1.dp, BorderSelected, RoundedCornerShape(SelectionBoxRadius))
                         },
                     ),
                 contentAlignment = Alignment.Center,

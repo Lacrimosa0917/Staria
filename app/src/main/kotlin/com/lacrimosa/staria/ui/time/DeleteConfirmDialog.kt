@@ -1,6 +1,17 @@
 package com.lacrimosa.staria.ui.time
 
 import androidx.compose.foundation.background
+import com.lacrimosa.staria.ui.theme.ActionRadius
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.BorderSelected
+import com.lacrimosa.staria.ui.theme.Danger
+import com.lacrimosa.staria.ui.theme.DialogRadius
+import com.lacrimosa.staria.ui.theme.Ink
+import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.PaperWhite
+import com.lacrimosa.staria.ui.theme.Scrim
+import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
+import com.lacrimosa.staria.ui.theme.SelectionBoxSize
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,11 +38,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.lacrimosa.staria.ui.theme.Ink
-import com.lacrimosa.staria.ui.theme.InkMuted
-import com.lacrimosa.staria.ui.theme.PaperWhite
-
-private val Hairline = Color(0xFFE6E2DA)
 
 /**
  * 删除确认弹窗。
@@ -53,7 +59,7 @@ fun DeleteConfirmDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.32f))
+                .background(Scrim)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -65,8 +71,8 @@ fun DeleteConfirmDialog(
                 modifier = Modifier
                     .padding(horizontal = 40.dp)
                     .fillMaxWidth()
-                    .background(PaperWhite, RoundedCornerShape(18.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(18.dp))
+                    .background(PaperWhite, RoundedCornerShape(DialogRadius))
+                    .border(1.dp, Border, RoundedCornerShape(DialogRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -105,12 +111,12 @@ fun DeleteConfirmDialog(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(17.dp)
+                            .size(SelectionBoxSize)
                             .then(
                                 if (dontAskAgain) {
-                                    Modifier.background(Ink, RoundedCornerShape(4.dp))
+                                    Modifier.background(Ink, RoundedCornerShape(SelectionBoxRadius))
                                 } else {
-                                    Modifier.border(1.dp, Color(0xFFC9C3B8), RoundedCornerShape(4.dp))
+                                    Modifier.border(1.dp, BorderSelected, RoundedCornerShape(SelectionBoxRadius))
                                 },
                             ),
                         contentAlignment = Alignment.Center,
@@ -156,12 +162,12 @@ private fun DialogButton(
     Box(
         modifier = Modifier
             .background(
-                color = if (primary) Color(0xFFB3261E) else Color.Transparent,
-                shape = RoundedCornerShape(9.dp),
+                color = if (primary) Danger else Color.Transparent,
+                shape = RoundedCornerShape(ActionRadius),
             )
             .then(
                 if (primary) Modifier
-                else Modifier.border(1.dp, Hairline, RoundedCornerShape(9.dp)),
+                else Modifier.border(1.dp, Border, RoundedCornerShape(ActionRadius)),
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },

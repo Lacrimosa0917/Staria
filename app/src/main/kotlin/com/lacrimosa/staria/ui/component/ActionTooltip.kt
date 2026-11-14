@@ -21,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -29,11 +28,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import kotlin.math.roundToInt
+import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import kotlin.math.roundToInt
-
-private val Hairline = Color(0xFFE6E2DA)
+import com.lacrimosa.staria.ui.theme.PopupRadius
+import com.lacrimosa.staria.ui.theme.Border
 
 /** tooltip 宽度。内容只有图标与两三个汉字，保持紧凑。 */
 private val TooltipWidth = 148.dp
@@ -161,8 +161,8 @@ fun ActionTooltip(
                 modifier = Modifier
                     .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
                     .width(TooltipWidth)
-                    .background(PaperWhite, RoundedCornerShape(12.dp))
-                    .border(1.dp, Hairline, RoundedCornerShape(12.dp))
+                    .background(PaperWhite, RoundedCornerShape(PopupRadius))
+                    .border(1.dp, Border, RoundedCornerShape(PopupRadius))
                     // 吞掉点击，避免穿透到关闭层
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -188,12 +188,12 @@ fun ActionTooltip(
                             imageVector = action.icon,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = if (action.destructive) DestructiveRed else Ink,
+                            tint = if (action.destructive) Danger else Ink,
                         )
                         Box(modifier = Modifier.size(9.dp))
                         Text(
                             text = action.label,
-                            color = if (action.destructive) DestructiveRed else Ink,
+                            color = if (action.destructive) Danger else Ink,
                             fontSize = 13.sp,
                         )
                     }
@@ -202,6 +202,3 @@ fun ActionTooltip(
         }
     }
 }
-
-/** 删除类操作的红色。 */
-val DestructiveRed = Color(0xFFB3261E)

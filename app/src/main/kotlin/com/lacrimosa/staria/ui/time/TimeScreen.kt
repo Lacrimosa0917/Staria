@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -46,19 +45,17 @@ import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.LocalContentInsets
-import com.lacrimosa.staria.ui.component.DestructiveRed
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.component.navFirstItemLeftX
 import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
 import com.lacrimosa.staria.ui.selection.SelectionState
+import java.time.format.DateTimeFormatter
+import com.lacrimosa.staria.ui.theme.Axis
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import java.time.format.DateTimeFormatter
-
-private val AxisColor = Color(0xFFD9D4CA)
 
 /**
  * 时间轴列宽占屏幕比例。
@@ -191,7 +188,7 @@ fun TimeScreen(
 
                         val startY = if (isFirst) (dotY - capPx).coerceAtLeast(0f) else dotY
                         drawLine(
-                            color = AxisColor,
+                            color = Axis,
                             start = Offset(x, startY),
                             end = Offset(x, dotY),
                             strokeWidth = stroke,
@@ -204,7 +201,7 @@ fun TimeScreen(
                             else -> cursor
                         }
                         drawLine(
-                            color = AxisColor,
+                            color = Axis,
                             start = Offset(x, dotY),
                             end = Offset(x, endY),
                             strokeWidth = stroke,

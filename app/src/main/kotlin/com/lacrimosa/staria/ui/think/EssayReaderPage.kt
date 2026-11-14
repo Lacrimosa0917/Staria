@@ -34,28 +34,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.ui.component.BarSidePadding
-import com.lacrimosa.staria.ui.icon.IconChevronLeft
+import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconMore
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
+import java.time.format.DateTimeFormatter
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import java.time.format.DateTimeFormatter
+import com.lacrimosa.staria.ui.theme.PopupRadius
+import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
 
-private val Hairline = Color(0xFFE6E2DA)
 private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/M/d")
 
 /** 圆形按钮直径。 */
-private val ButtonSize = 38.dp
+private val ButtonSize = SecondaryButtonSize
 
 /** 菜单面板宽度。 */
 private val MenuWidth = 132.dp
@@ -70,7 +72,7 @@ private val MenuPadV = 4.dp
 private val CircleRadius = ButtonSize / 2
 
 /** 展开态圆角半径。 */
-private val MenuRadius = 12.dp
+private val MenuRadius = PopupRadius
 
 /**
  * 随笔查看页（二级全屏页面）。
@@ -208,7 +210,7 @@ fun EssayReaderPage(
                 .padding(start = BarSidePadding, top = 14.dp),
         ) {
             CircleIconButton(
-                icon = IconChevronLeft,
+                icon = IconBack,
                 description = "返回",
                 onClick = onBack,
             )
@@ -222,7 +224,7 @@ fun EssayReaderPage(
                 .padding(end = BarSidePadding, top = 14.dp)
                 .size(boxWidth, boxHeight)
                 .background(PaperWhite, RoundedCornerShape(corner))
-                .border(1.dp, Hairline, RoundedCornerShape(corner)),
+                .border(1.dp, Border, RoundedCornerShape(corner)),
         ) {
             // 三点图标：收起态显示，展开时淡出
             Box(
@@ -306,12 +308,12 @@ private fun MenuRow(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(14.dp),
-            tint = if (destructive) Color(0xFFB3261E) else Ink,
+            tint = if (destructive) Danger else Ink,
         )
         Spacer(Modifier.width(9.dp))
         Text(
             text = label,
-            color = if (destructive) Color(0xFFB3261E) else Ink,
+            color = if (destructive) Danger else Ink,
             fontSize = 13.sp,
         )
     }
@@ -328,7 +330,7 @@ private fun CircleIconButton(
         modifier = Modifier
             .size(ButtonSize)
             .background(PaperWhite, CircleShape)
-            .border(1.dp, Hairline, CircleShape)
+            .border(1.dp, Border, CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

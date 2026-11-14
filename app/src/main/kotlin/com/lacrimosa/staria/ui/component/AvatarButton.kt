@@ -1,6 +1,9 @@
 package com.lacrimosa.staria.ui.component
 
 import androidx.compose.foundation.BorderStroke
+import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.Ink
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -9,14 +12,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.lacrimosa.staria.ui.theme.CardPaper
-import com.lacrimosa.staria.ui.theme.Ink
 
 /**
  * 圆形头像按钮：昵称首字符。
@@ -32,11 +32,11 @@ fun AvatarButton(
 ) {
     Surface(
         modifier = modifier
-            .size(44.dp)
+            .size(AvatarSize)
             .semantics { contentDescription = "个人主页" },
         shape = CircleShape,
         color = CardPaper,
-        border = BorderStroke(1.dp, Color(0xFFE6E2DA)),
+        border = BorderStroke(1.dp, Border),
         onClick = onClick,
     ) {
         Box(contentAlignment = Alignment.Center) {
