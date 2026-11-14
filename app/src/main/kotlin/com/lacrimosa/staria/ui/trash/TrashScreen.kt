@@ -1,0 +1,601 @@
+package com.lacrimosa.staria.ui.trash
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.lacrimosa.staria.data.TrashItem
+import com.lacrimosa.staria.data.TrashKind
+import com.lacrimosa.staria.ui.component.ActionTooltip
+import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.DestructiveRed
+import com.lacrimosa.staria.ui.component.TooltipAction
+import com.lacrimosa.staria.ui.icon.IconChecklist
+import com.lacrimosa.staria.ui.icon.IconChevronLeft
+import com.lacrimosa.staria.ui.icon.IconTrash
+import com.lacrimosa.staria.ui.icon.IconUndo
+import com.lacrimosa.staria.ui.theme.CardPaper
+import com.lacrimosa.staria.ui.theme.Ink
+import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PaperWhite
+import java.time.format.DateTimeFormatter
+
+private val Border = Color(0xFFE6E2DA)
+
+/** 日期格式：与查看页统一。 */
+private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/M/d")
+
+/** 圆形按键直径：与其它二级页保持一致。 */
+private val ButtonSize = 38.dp
+
+/** 卡片高度固定（README：等宽等高），正文只显示一行。 */
+private val CardHeight = 84.dp
+
+/** 多选时内容右移的距离（为左侧选中框让位）。 */
+private val SelectShift = 26.dp
+
+/**
+ * 星尘（回收站）。
+ *
+ * README 要求：
+ * - 二级页面；左上角返回，右侧刻本宋体「星尘」标题
+ * - 条目以等宽等高卡片排列，新删除的在上方
+ * - 卡片第一行「类型 + 日期」，第二行正文预览单行省略
+ * - 长按一秒弹出 恢复 / 删除 / 多选
+ *   - 删除为永久删除
+ *   - 恢复移出星尘，回到对应查看页
+ * - 多选：卡片第一行左移、左侧出现选中框；
+ *   左下角批量恢复、右下角批量删除，两者执行前都要确认
+ */
+@Composable
+fun TrashScreen(
+    items: List<TrashItem>,
+    onBack: () -> Unit,
+    onRestore: (List<Long>) -> Unit,
+    onDelete: (List<Long>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // ordered 为仓库层给的数据顺序（已按删除顺序倒序）
+    var selectionMode by remember { mutableStateOf(false) }
+    val selected = remember { mutableStateListOf<Long>() }
+
+    var tooltipItem by remember { mutableStateOf<TrashItem?>(null) }
+    var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
+
+    // 待确认的批量动作：null / 恢复 / 删除
+    var pendingRestore by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf(false) }
+
+    /**
+     * 兜底确认：多选状态下如果列表被清空（例如恢复/删除后只剩空），
+     * 顺手退出多选，否则底栏会停在一个没内容的模式里。
+     */
+    if (items.isEmpty() && selectionMode) {
+        selectionMode = false
+        selected.clear()
+    }
+
+    fun exitSelection() {
+        selectionMode = false
+        selected.clear()
+    }
+
+    Box(modifier = modifier.fillMaxSize().background(PaperWhite)) {
+        // ---------- 内容 ----------
+        if (items.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "星尘",
+                    color = InkMuted.copy(alpha = 0.45f),
+                    fontSize = 13.sp,
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    // 顶栏按钮悬浮，内容让出它的高度
+                    .padding(top = ButtonSize + 34.dp),
+            ) {
+                items.forEach { item ->
+                    TrashCard(
+                        item = item,
+                        selectionMode = selectionMode,
+                        selected = selected.contains(item.trashId),
+                        onClick = {
+                            if (selectionMode) {
+                                if (selected.contains(item.trashId)) {
+                                    selected.remove(item.trashId)
+                                } else {
+                                    selected.add(item.trashId)
+                                }
+                            }
+                        },
+                        onLongPress = { pos ->
+                            if (!selectionMode) {
+                                tooltipAnchor = pos
+                                tooltipItem = item
+                            }
+                        },
+                    )
+                    Spacer(Modifier.height(10.dp))
+                }
+
+                // 滚到底时最后一张停在底部按钮之上
+                Spacer(Modifier.height(CardHeight + 40.dp))
+            }
+        }
+
+        // ---------- 顶栏 ----------
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = BarSidePadding, top = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircleButton(icon = IconChevronLeft, description = "返回", onClick = onBack)
+            Spacer(Modifier.width(14.dp))
+            Text(
+                text = "星尘",
+                fontFamily = KebenSong,
+                fontSize = 19.sp,
+                color = Ink,
+            )
+        }
+
+        // ---------- 多选态底部：左恢复 / 右删除 ----------
+        if (selectionMode) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .fillMaxWidth()
+                    .padding(horizontal = BarSidePadding, vertical = 18.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PillButton(
+                    label = "恢复",
+                    icon = IconUndo,
+                    enabled = selected.isNotEmpty(),
+                    onClick = { pendingRestore = true },
+                )
+                CircleActionButton(
+                    icon = IconTrash,
+                    description = "删除",
+                    enabled = selected.isNotEmpty(),
+                    onClick = { pendingDelete = true },
+                )
+            }
+        }
+    }
+
+    // ---------- 长按 tooltip ----------
+    tooltipItem?.let { item ->
+        ActionTooltip(
+            anchor = tooltipAnchor,
+            actions = listOf(
+                TooltipAction(
+                    label = "恢复",
+                    icon = IconUndo,
+                    onClick = {
+                        tooltipItem = null
+                        onRestore(listOf(item.trashId))
+                    },
+                ),
+                TooltipAction(
+                    label = "删除",
+                    icon = IconTrash,
+                    destructive = true,
+                    onClick = {
+                        tooltipItem = null
+                        onDelete(listOf(item.trashId))
+                    },
+                ),
+                TooltipAction(
+                    label = "多选",
+                    icon = IconChecklist,
+                    onClick = {
+                        tooltipItem = null
+                        selectionMode = true
+                        selected.clear()
+                        selected.add(item.trashId)
+                    },
+                ),
+            ),
+            onDismiss = { tooltipItem = null },
+        )
+    }
+
+    // ---------- 批量恢复确认 ----------
+    if (pendingRestore) {
+        ConfirmDialog(
+            title = "恢复 ${selected.size} 条记录？",
+            message = "恢复后将回到对应的查看页。",
+            confirmLabel = "恢复",
+            destructive = false,
+            onCancel = { pendingRestore = false },
+            onConfirm = {
+                pendingRestore = false
+                onRestore(selected.toList())
+                exitSelection()
+            },
+        )
+    }
+
+    // ---------- 批量删除确认 ----------
+    if (pendingDelete) {
+        ConfirmDialog(
+            title = "永久删除 ${selected.size} 条记录？",
+            message = "此操作不可撤销，删除后不再保留。",
+            confirmLabel = "删除",
+            destructive = true,
+            onCancel = { pendingDelete = false },
+            onConfirm = {
+                pendingDelete = false
+                onDelete(selected.toList())
+                exitSelection()
+            },
+        )
+    }
+}
+
+/** mutableStateListOf 的 Long 版本别名，避免顶部再引一次包。 */
+/**
+ * 一张回收站卡片。
+ *
+ * 版式（README）：
+ * - 第一行：类型 + 日期（多选时整体右移，左侧出现选中框）
+ * - 第二行：正文预览，单行，超出省略
+ * - 卡片等宽等高
+ */
+@Composable
+private fun TrashCard(
+    item: TrashItem,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongPress: (Offset) -> Unit,
+) {
+    val shift = if (selectionMode) SelectShift else 0.dp
+    var windowOrigin by remember { mutableStateOf(Offset.Zero) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = BarSidePadding)
+            .height(CardHeight)
+            .onGloballyPositioned { windowOrigin = it.positionInWindow() }
+            .background(CardPaper, RoundedCornerShape(14.dp))
+            .border(1.dp, Border, RoundedCornerShape(14.dp))
+            // 点击与长按必须在同一个 detectTapGestures 里
+            .pointerInput(selectionMode) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { local ->
+                        if (!selectionMode) onLongPress(windowOrigin + local)
+                    },
+                )
+            }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = shift),
+        ) {
+            // 第一行：类型 + 日期
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = item.kind.label,
+                    color = Ink,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = item.date.format(DateFormatter),
+                    color = InkMuted,
+                    fontSize = 11.sp,
+                )
+            }
+
+            Spacer(Modifier.height(9.dp))
+
+            // 第二行：正文预览，只显示一行
+            Text(
+                text = previewText(item),
+                color = Ink,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        // 选中框：多选时出现在最左侧
+        if (selectionMode) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .size(17.dp)
+                    .then(
+                        if (selected) {
+                            Modifier.background(Ink, RoundedCornerShape(4.dp))
+                        } else {
+                            Modifier.border(1.dp, Color(0xFFC9C3B8), RoundedCornerShape(4.dp))
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Text(
+                        text = "✓",
+                        color = CardPaper,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 卡片第二行展示的文本。
+ *
+ * 摘录没有标题，直接展示正文；有来源时并在后面，
+ * 让预览也能看出这条摘录的出处。
+ */
+private fun previewText(item: TrashItem): String = when {
+    item.kind == TrashKind.Excerpt && !item.source.isNullOrBlank() ->
+        "${item.body}　— ${item.source}"
+    else -> item.body.ifBlank { item.title }
+}
+
+/** 圆形图标按键（返回用）。 */
+@Composable
+private fun CircleButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(ButtonSize)
+            .background(PaperWhite, CircleShape)
+            .border(1.dp, Border, CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(17.dp),
+            tint = Ink,
+        )
+    }
+}
+
+/** 胶囊按钮：左下角的批量恢复。 */
+@Composable
+private fun PillButton(
+    label: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .height(ButtonSize)
+            .background(PaperWhite, RoundedCornerShape(ButtonSize / 2))
+            .border(1.dp, Border, RoundedCornerShape(ButtonSize / 2))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            )
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(15.dp),
+            tint = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
+        )
+        Spacer(Modifier.width(7.dp))
+        Text(
+            text = label,
+            color = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
+            fontSize = 13.sp,
+        )
+    }
+}
+
+/** 圆形按钮：右下角的批量删除（红色，与纸条页的删除按钮呼应）。 */
+@Composable
+private fun CircleActionButton(
+    icon: ImageVector,
+    description: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(ButtonSize)
+            .background(
+                if (enabled) DestructiveRed else Color(0xFFD8D4CC),
+                CircleShape,
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            modifier = Modifier.size(17.dp),
+            tint = PaperWhite,
+        )
+    }
+}
+
+/** 批量操作前的确认弹窗。 */
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    destructive: Boolean,
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onCancel,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.32f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onCancel,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 40.dp)
+                    .fillMaxWidth()
+                    .background(PaperWhite, RoundedCornerShape(18.dp))
+                    .border(1.dp, Border, RoundedCornerShape(18.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {}
+                    .padding(horizontal = 22.dp, vertical = 20.dp),
+            ) {
+                Text(
+                    text = title,
+                    color = Ink,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = message,
+                    color = InkMuted,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                )
+                Spacer(Modifier.height(18.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    DialogButton(label = "取消", primary = false, onClick = onCancel)
+                    Spacer(Modifier.width(10.dp))
+                    DialogButton(
+                        label = confirmLabel,
+                        primary = true,
+                        destructive = destructive,
+                        onClick = onConfirm,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DialogButton(
+    label: String,
+    primary: Boolean,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
+) {
+    Box(
+        modifier = Modifier
+            .background(
+                color = when {
+                    !primary -> Color.Transparent
+                    destructive -> DestructiveRed
+                    else -> Ink
+                },
+                shape = RoundedCornerShape(9.dp),
+            )
+            .then(
+                if (primary) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(9.dp)),
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(horizontal = 20.dp, vertical = 9.dp),
+    ) {
+        Text(
+            text = label,
+            color = if (primary) PaperWhite else Ink,
+            fontSize = 14.sp,
+            fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal,
+        )
+    }
+}

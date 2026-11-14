@@ -319,6 +319,41 @@ val IconClose: ImageVector by lazy {
     }
 }
 
+/** 勾：确认 / 已选中。 */
+val IconCheck: ImageVector by lazy {
+    build("Check") {
+        moveTo(5.2f, 12.6f)
+        lineTo(9.8f, 17.2f)
+        lineTo(18.8f, 6.8f)
+    }
+}
+
+/**
+ * 空白占位图标。
+ *
+ * tooltip 的每一项都必须带图标才能保持文字左对齐，
+ * 未选中项用这个只有一段不可见路径的图标占据同样的宽度。
+ */
+val IconDotPlaceholder: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "DotPlaceholder",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(
+            fill = null,
+            stroke = null,
+            strokeLineWidth = 0f,
+            pathBuilder = {
+                moveTo(12f, 12f)
+                lineTo(12f, 12f)
+            },
+        )
+    }.build()
+}
+
 /**
  * 更多：三个圆点。
  *

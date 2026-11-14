@@ -33,6 +33,9 @@ import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.RecordCounts
 import com.lacrimosa.staria.data.SampleData
+import com.lacrimosa.staria.data.SettingsStore
+import com.lacrimosa.staria.data.TrashItem
+import com.lacrimosa.staria.data.TrashKind
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.runtime.CompositionLocalProvider
@@ -56,10 +59,12 @@ import com.lacrimosa.staria.ui.paper.PaperScreen
 import com.lacrimosa.staria.ui.profile.NicknameDialog
 import com.lacrimosa.staria.ui.profile.ProfileDrawer
 import com.lacrimosa.staria.ui.selection.SelectionState
+import com.lacrimosa.staria.ui.settings.SettingsScreen
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.think.EssayReaderPage
 import com.lacrimosa.staria.ui.think.ThinkScreen
 import com.lacrimosa.staria.ui.time.TimeScreen
+import com.lacrimosa.staria.ui.trash.TrashScreen
 import java.time.LocalDate
 
 /**
@@ -67,6 +72,51 @@ import java.time.LocalDate
  */
 private fun nextId(existing: Collection<Long>): Long =
     (existing.maxOrNull() ?: 0L) + 1L
+
+/**
+ * 回收站条目的内部 id。
+ *
+ * 不能复用原条目 id：三类内容各自从 1 开始编号，直接混在一起会撞号。
+ * 用「类型 + 原 id」拼一个稳定的键，同一类型内天然唯一。
+ */
+private fun trashIdOf(kind: TrashKind, originalId: Long): Long =
+    kind.ordinal.toLong() * 1_000_000_000L + originalId
+
+/** 日记 → 星尘条目。 */
+private fun DiaryEntry.toTrash(): TrashItem = TrashItem(
+    trashId = trashIdOf(TrashKind.Diary, id),
+    kind = TrashKind.Diary,
+    originalId = id,
+    date = date,
+    title = title,
+    body = body,
+    source = null,
+    deletedAt = System.nanoTime(),
+)
+
+/** 纸条 → 星尘条目。 */
+private fun PaperNote.toTrash(): TrashItem = TrashItem(
+    trashId = trashIdOf(TrashKind.Excerpt, id),
+    kind = TrashKind.Excerpt,
+    originalId = id,
+    date = editedOn,
+    title = "",
+    body = text,
+    source = source,
+    deletedAt = System.nanoTime(),
+)
+
+/** 随笔 → 星尘条目。 */
+private fun Essay.toTrash(): TrashItem = TrashItem(
+    trashId = trashIdOf(TrashKind.Essay, id),
+    kind = TrashKind.Essay,
+    originalId = id,
+    date = date,
+    title = title,
+    body = body,
+    source = null,
+    deletedAt = System.nanoTime(),
+)
 
 /**
  * 应用根布局。
@@ -108,6 +158,19 @@ fun StariaApp() {
     // 随笔数据：思索页
     var essays by remember { mutableStateOf(SampleData.essays) }
 
+    // 星尘（回收站）。所有删除都先进这里，恢复时再写回对应列表。
+    // 顺序即删除顺序，展示时倒序（新删除的在上方）
+    var trash by remember { mutableStateOf<List<TrashItem>>(emptyList()) }
+
+    // 二级页面：星尘 / 设置。null 表示不展示
+    var showTrash by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+
+    // 设置项（主题色、深色模式）
+    val settingsStore = remember { SettingsStore(context) }
+    var themeColor by remember { mutableStateOf(settingsStore.loadThemeColor()) }
+    var darkMode by remember { mutableStateOf(settingsStore.loadDarkMode()) }
+
     // 多选状态。放在根布局是因为：
     // - 红色删除按钮要顶替新建按钮、与之同位置，只能由底栏渲染
     // - 系统返回键退出多选的处理也在这里
@@ -120,12 +183,15 @@ fun StariaApp() {
         selection.setOverlay(false)
     }
 
-    // 系统返回键的优先级：关闭编辑页 → 关闭随笔查看页 → 关展开卡片 → 退多选 → 交给系统
+    // 系统返回键的优先级：
+    // 星尘/设置 → 编辑页 → 随笔查看页 → 关展开卡片 → 退多选 → 交给系统
     BackHandler(
-        enabled = editDraft != null || readerEssay != null ||
+        enabled = showTrash || showSettings || editDraft != null || readerEssay != null ||
             expandedNote != null || selection.isActive,
     ) {
         when {
+            showTrash -> showTrash = false
+            showSettings -> showSettings = false
             // 编辑页有自己的未保存拦截，这里只做兜底：直接丢弃草稿
             editDraft != null -> editDraft = null
             readerEssay != null -> readerEssay = null
@@ -147,17 +213,61 @@ fun StariaApp() {
         val ids = selection.selectedIds.toList()
         when (currentTab) {
             StariaTab.Time -> {
+                val moving = diaryEntries.filter { it.id in ids }
                 diaryEntries = diaryEntries.filterNot { it.id in ids }
+                trash = trash + moving.map { it.toTrash() }
             }
             StariaTab.Paper -> {
+                val moving = paperNotes.filter { it.id in ids }
                 paperNotes = paperNotes.filterNot { it.id in ids }
+                trash = trash + moving.map { it.toTrash() }
             }
             StariaTab.Think -> {
+                val moving = essays.filter { it.id in ids }
                 essays = essays.filterNot { it.id in ids }
+                trash = trash + moving.map { it.toTrash() }
             }
             else -> Unit
         }
         selection.exit()
+    }
+
+    // ---------- 星尘：恢复 ----------
+    // 按类型写回各自的列表；原 id 不变，所以恢复后的条目回到原来的位置
+    val onRestoreFromTrash: (List<Long>) -> Unit = { ids ->
+        val restoring = trash.filter { it.trashId in ids }
+        trash = trash.filterNot { it.trashId in ids }
+
+        val diaries = restoring.filter { it.kind == TrashKind.Diary }
+        if (diaries.isNotEmpty()) {
+            diaryEntries = diaryEntries + diaries.map {
+                DiaryEntry(id = it.originalId, date = it.date, title = it.title, body = it.body)
+            }
+        }
+
+        val papers = restoring.filter { it.kind == TrashKind.Excerpt }
+        if (papers.isNotEmpty()) {
+            paperNotes = paperNotes + papers.map {
+                PaperNote(
+                    id = it.originalId,
+                    text = it.body,
+                    source = it.source,
+                    editedOn = it.date,
+                )
+            }
+        }
+
+        val restoredEssays = restoring.filter { it.kind == TrashKind.Essay }
+        if (restoredEssays.isNotEmpty()) {
+            essays = essays + restoredEssays.map {
+                Essay(id = it.originalId, date = it.date, title = it.title, body = it.body)
+            }
+        }
+    }
+
+    // ---------- 星尘：永久删除 ----------
+    val onPurgeFromTrash: (List<Long>) -> Unit = { ids ->
+        trash = trash.filterNot { it.trashId in ids }
     }
 
     // ---------- 编辑页：新建 ----------
@@ -316,6 +426,8 @@ fun StariaApp() {
                                 )
                             },
                             onDelete = { entry: DiaryEntry ->
+                                // 移入星尘，时间页不再展示（README）
+                                trash = trash + entry.toTrash()
                                 diaryEntries = diaryEntries.filterNot { it.id == entry.id }
                             },
                         )
@@ -334,6 +446,7 @@ fun StariaApp() {
                                 )
                             },
                             onDelete = { note: PaperNote ->
+                                trash = trash + note.toTrash()
                                 paperNotes = paperNotes.filterNot { it.id == note.id }
                             },
                             onExpand = { note ->
@@ -356,6 +469,7 @@ fun StariaApp() {
                                 )
                             },
                             onDelete = { essay: Essay ->
+                                trash = trash + essay.toTrash()
                                 essays = essays.filterNot { it.id == essay.id }
                             },
                             onOpen = { essay -> readerEssay = essay },
@@ -415,8 +529,14 @@ fun StariaApp() {
                 ),
                 onDismiss = { profileVisible = false },
                 onEditNickname = { editingNickname = true },
-                onOpenRecycleBin = { /* 星尘页后续接入 */ },
-                onOpenSettings = { /* 设置页后续接入 */ },
+                onOpenRecycleBin = {
+                    profileVisible = false
+                    showTrash = true
+                },
+                onOpenSettings = {
+                    profileVisible = false
+                    showSettings = true
+                },
             )
         }
 
@@ -450,8 +570,37 @@ fun StariaApp() {
                     )
                 },
                 onDelete = {
+                    trash = trash + essay.toTrash()
                     essays = essays.filterNot { it.id == essay.id }
                     readerEssay = null
+                },
+            )
+        }
+
+        // ---------- 星尘（二级全屏） ----------
+        if (showTrash) {
+            TrashScreen(
+                // 新删除的在上方
+                items = trash.sortedByDescending { it.deletedAt },
+                onBack = { showTrash = false },
+                onRestore = onRestoreFromTrash,
+                onDelete = onPurgeFromTrash,
+            )
+        }
+
+        // ---------- 设置（二级全屏） ----------
+        if (showSettings) {
+            SettingsScreen(
+                themeColor = themeColor,
+                darkMode = darkMode,
+                onBack = { showSettings = false },
+                onPickThemeColor = { color ->
+                    themeColor = color
+                    settingsStore.saveThemeColor(color)
+                },
+                onPickDarkMode = { mode ->
+                    darkMode = mode
+                    settingsStore.saveDarkMode(mode)
                 },
             )
         }
