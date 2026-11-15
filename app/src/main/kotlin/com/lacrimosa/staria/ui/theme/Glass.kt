@@ -67,6 +67,19 @@ internal object GlassSpec {
 
     /** 低版本降级时的纸面不透明度。只有拿不到 backdrop 时才用。 */
     const val FALLBACK_ALPHA = 0.94f
+
+    /**
+     * tooltip 专用模糊半径：比普通玻璃更高，把下面正文糊成色晕，
+     * 保证菜单文字清晰可读（普通面板只追求通透，不靠模糊保可读性）。
+     */
+    const val TOOLTIP_BLUR_DP = 10f
+
+    /**
+     * tooltip 专用蒙层：一层极薄的半透明白，叠在玻璃之上。
+     * 只对 tooltip 生效，弥补高模糊仍不足以压住背景正文对比度的问题。
+     * 数值克制，避免把玻璃糊成实心白片。
+     */
+    const val TOOLTIP_SURFACE_ALPHA = 0.30f
 }
 
 /** 当前系统是否支持 RenderEffect（模糊）。 */
@@ -89,11 +102,12 @@ internal val supportsRuntimeShader: Boolean
  */
 internal fun BackdropEffectScope.stariaGlassEffects(
     refractionScale: Float = 1f,
+    blurDp: Float = GlassSpec.BLUR_DP,
 ) {
     // 玻璃盖住白纸后颜色会发灰，vibrancy（饱和度 ×1.5）把纸色拉回来
     vibrancy()
     if (supportsRenderEffect) {
-        blur(GlassSpec.BLUR_DP.dp.toPx())
+        blur(blurDp.dp.toPx())
     }
     if (supportsRuntimeShader && refractionScale > 0f) {
         // 折射高度不得超过 shape 的最小圆角，否则角落会出现断裂。

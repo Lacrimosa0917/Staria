@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lacrimosa.staria.data.NICKNAME_MAX_WEIGHT
+import com.lacrimosa.staria.data.ThemeColor
 import com.lacrimosa.staria.data.nicknameWeight
 import com.lacrimosa.staria.ui.theme.ActionRadius
 import com.lacrimosa.staria.ui.theme.Border
@@ -46,8 +48,10 @@ import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.InputBackground
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
+import com.lacrimosa.staria.ui.theme.accent
 
 /**
  * 修改昵称浮窗（README：包含取消与确定两个选项）。
@@ -60,11 +64,15 @@ fun NicknameDialog(
     initial: String,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
+    themeColor: ThemeColor = ThemeColor.Plain,
 ) {
     var text by remember { mutableStateOf(initial) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
+    // Dialog 是独立窗口，CompositionLocal 不跨窗口传递。
+    // 该弹窗在根布局 CompositionLocalProvider 之外渲染，直接由调用方传入主题色，
+    // 再在窗口内重新 provide。
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     val used = nicknameWeight(text)
@@ -75,6 +83,7 @@ fun NicknameDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        CompositionLocalProvider(LocalThemeColor provides themeColor) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -179,6 +188,7 @@ fun NicknameDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -189,11 +199,13 @@ private fun DialogAction(
     onClick: () -> Unit,
     enabled: Boolean = true,
 ) {
-    // 不可用时整体压成全灰，避免和「可用的黑色主按钮」混淆
+    // 不可用时整体压成全灰，避免和「可用的主按钮」混淆
+    // 主按钮（确认）用主题色：简约白回落为墨色，其余主题取其强调色
+    val accent = LocalThemeColor.current.accent()
     val bg = when {
         !primary -> Color.Transparent
         !enabled -> BorderDisabled
-        else -> Ink
+        else -> accent
     }
     val fg = when {
         !primary && !enabled -> InkMuted.copy(alpha = 0.5f)

@@ -38,20 +38,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.DarkMode
 import com.lacrimosa.staria.data.ThemeColor
-import com.lacrimosa.staria.ui.component.ActionTooltip
+import com.lacrimosa.staria.ui.component.AnchorCorner
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.GlassCircleButton
+import com.lacrimosa.staria.ui.component.PageGlassLayer
 import com.lacrimosa.staria.ui.component.TooltipAction
+import com.lacrimosa.staria.ui.component.TooltipSurface
 import com.lacrimosa.staria.ui.icon.IconCheck
 import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconChevronRight
 import com.lacrimosa.staria.ui.icon.IconDotPlaceholder
 import com.lacrimosa.staria.ui.theme.Border
-import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
-import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PanelRadius
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
@@ -91,22 +91,27 @@ fun SettingsScreen(
     var showDarkTooltip by remember { mutableStateOf(false) }
     var darkAnchor by remember { mutableStateOf(Offset.Zero) }
 
-    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .statusBarsPadding()
-                // 顶栏悬浮，内容让出它的高度
-                .padding(top = ButtonSize + 34.dp),
-        ) {
+    // PageGlassLayer：本页自己录一份 backdrop，让返回圆钮透出的是本页内容，
+    // 而不是根布局那层（那只录了四个 tab 的内容）。
+    // content 会被录进 backdrop；chrome 里的玻璃控件不录制（否则画自己、栈溢出）。
+    PageGlassLayer(
+        modifier = modifier,
+        content = {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    // 顶栏悬浮，内容让出它的高度
+                    .padding(top = ButtonSize + 34.dp),
+            ) {
             // ---------- 主题色卡片 ----------
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = BarSidePadding)
-                    .background(CardPaper, RoundedCornerShape(PanelRadius))
-                    .border(1.dp, Border, RoundedCornerShape(PanelRadius))
+                    // 纯白卡面，不描边：与 #F5F5F5 底色的层次只靠色差
+                    .background(PaperWhite, RoundedCornerShape(PanelRadius))
                     .padding(horizontal = 18.dp, vertical = 16.dp),
             ) {
                 // 当前：颜色名
@@ -158,9 +163,8 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = BarSidePadding)
-                    .background(CardPaper, RoundedCornerShape(PanelRadius))
-                    .border(1.dp, Border, RoundedCornerShape(PanelRadius))
-                    .onGloballyPositioned { darkAnchor = it.positionInWindow() }
+                    // 纯白卡面，不描边：与 #F5F5F5 底色的层次只靠色差
+                    .background(PaperWhite, RoundedCornerShape(PanelRadius))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -176,27 +180,40 @@ fun SettingsScreen(
                     color = Ink,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = darkMode.label,
-                    fontSize = 13.sp,
-                    color = InkMuted,
-                )
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    // 用右尖括号旋转 90° 表示「向下展开」，避免再画一个图标
-                    imageVector = IconChevronRight,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(13.dp)
-                        .rotate(90f),
-                    tint = InkMuted,
-                )
+                // 右侧当前选项 + 向下箭头。锚点取这一段的**右下角**，
+                // 让 tooltip 从本行下方、靠右的位置向下展开，不遮挡本行内容。
+                Box(
+                    modifier = Modifier.onGloballyPositioned { coords ->
+                        val p = coords.positionInWindow()
+                        val size = coords.size
+                        darkAnchor = Offset(p.x + size.width, p.y + size.height)
+                    },
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = darkMode.label,
+                            fontSize = 13.sp,
+                            color = InkMuted,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            // 用右尖括号旋转 90° 表示「向下展开」，避免再画一个图标
+                            imageVector = IconChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(13.dp)
+                                .rotate(90f),
+                            tint = InkMuted,
+                        )
+                    }
+                }
             }
 
             // 底部留白
             Spacer(Modifier.height(40.dp))
         }
-
+        },
+        chrome = {
         // ---------- 顶栏 ----------
         Row(
             modifier = Modifier
@@ -218,26 +235,31 @@ fun SettingsScreen(
                 color = Ink,
             )
         }
-    }
 
-    // ---------- 深色模式 tooltip（向下展开） ----------
-    if (showDarkTooltip) {
-        ActionTooltip(
-            anchor = darkAnchor,
-            actions = DarkMode.entries.map { mode ->
-                TooltipAction(
-                    label = mode.label,
-                    // 已选中的那项用勾图标标记，其余用同尺寸占位图标保持左对齐
-                    icon = if (mode == darkMode) IconCheck else IconDotPlaceholder,
-                    onClick = {
-                        showDarkTooltip = false
-                        onPickDarkMode(mode)
-                    },
-                )
-            },
-            onDismiss = { showDarkTooltip = false },
-        )
-    }
+        // ---------- 深色模式 tooltip（从右侧当前选项处向下展开） ----------
+        // 必须渲染在 chrome 内（录制层之外），并直接用 TooltipSurface：
+        // - 这样它采到的是本页的 backdrop，而不是根布局那层主页内容
+        // - 不能走 ActionTooltip（它会转发给根布局 TooltipSurface，采根 backdrop）
+        if (showDarkTooltip) {
+            TooltipSurface(
+                anchor = darkAnchor,
+                actions = DarkMode.entries.map { mode ->
+                    TooltipAction(
+                        label = mode.label,
+                        // 已选中的那项用勾图标标记，其余用同尺寸占位图标保持左对齐
+                        icon = if (mode == darkMode) IconCheck else IconDotPlaceholder,
+                        onClick = {
+                            showDarkTooltip = false
+                            onPickDarkMode(mode)
+                        },
+                    )
+                },
+                onDismiss = { showDarkTooltip = false },
+                preferredCorner = AnchorCorner.TopRight,
+            )
+        }
+        },
+    )
 }
 
 /** 一个色块。选中时套一圈墨色描边，中间以墨色旋转45°的小方块收边。 */

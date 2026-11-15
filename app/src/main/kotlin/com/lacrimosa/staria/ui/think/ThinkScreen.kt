@@ -42,13 +42,12 @@ import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
 import com.lacrimosa.staria.ui.selection.SelectionState
-import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.BorderSelected
 import com.lacrimosa.staria.ui.theme.CardGap
-import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
 import com.lacrimosa.staria.ui.theme.SelectionBoxSize
 import com.lacrimosa.staria.ui.theme.SelectionShift
@@ -83,7 +82,7 @@ fun ThinkScreen(
     modifier: Modifier = Modifier,
 ) {
     // 新的在下方：按日期升序
-    val ordered = remember(essays) { essays.sortedBy { it.date } }
+    val ordered = remember(essays) { essays.sortedByDescending { it.date } }
 
     var tooltipEssay by remember { mutableStateOf<Essay?>(null) }
     var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
@@ -214,9 +213,8 @@ private fun EssayCard(
             .onGloballyPositioned { coords ->
                 windowOrigin = coords.positionInWindow()
             }
-            // 卡片底色与纸条页一致，略深于纯白背景
-            .background(CardPaper, RoundedCornerShape(CardRadius))
-            .border(1.dp, Border, RoundedCornerShape(CardRadius))
+            // 纯白卡面，不描边：与 #F5F5F5 底色的层次只靠色差
+            .background(PaperWhite, RoundedCornerShape(CardRadius))
             // 点击与长按放在同一个 detectTapGestures 里
             .pointerInput(selectionMode) {
                 detectTapGestures(
@@ -230,14 +228,17 @@ private fun EssayCard(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // ---------- 第一行：日期 ----------
+            // lineHeight 压到 14sp：11sp 文字吃默认行高会让这一行偏胖，
+            // 与下方标题之间的间隙也跟着变大。
             Text(
                 text = essay.date.format(DateFormatter),
                 modifier = Modifier.padding(start = shift),
                 color = InkMuted,
                 fontSize = 11.sp,
+                lineHeight = 14.sp,
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
 
             // ---------- 第二行：标题（更高字号与字重）----------
             Text(
@@ -283,7 +284,7 @@ private fun EssayCard(
                 if (selected) {
                     Text(
                         text = "✓",
-                        color = CardPaper,
+                        color = PaperWhite,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                     )

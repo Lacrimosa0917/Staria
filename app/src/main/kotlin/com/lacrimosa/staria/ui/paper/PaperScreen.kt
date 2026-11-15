@@ -46,13 +46,12 @@ import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
 import com.lacrimosa.staria.ui.selection.SelectionState
-import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.BorderSelected
 import com.lacrimosa.staria.ui.theme.CardGap
-import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
 import com.lacrimosa.staria.ui.theme.SelectionBoxSize
 import com.lacrimosa.staria.ui.theme.SelectionShift
@@ -89,7 +88,7 @@ fun PaperScreen(
     modifier: Modifier = Modifier,
 ) {
     // 新的在下方：按编辑日期升序
-    val ordered = remember(notes) { notes.sortedBy { it.editedOn } }
+    val ordered = remember(notes) { notes.sortedByDescending { it.editedOn } }
 
     var tooltipNote by remember { mutableStateOf<PaperNote?>(null) }
     // 长按点在窗口里的位置，tooltip 据此决定贴哪个角
@@ -227,9 +226,8 @@ private fun PaperNoteCard(
             .onGloballyPositioned { coords ->
                 windowOrigin = coords.positionInWindow()
             }
-            // 卡片底色略深于纯白背景，但不影响阅读
-            .background(CardPaper, RoundedCornerShape(CardRadius))
-            .border(1.dp, Border, RoundedCornerShape(CardRadius))
+            // 纯白卡面，不描边：与 #F5F5F5 底色的层次只靠色差
+            .background(PaperWhite, RoundedCornerShape(CardRadius))
             // 点击与长按放在同一个 detectTapGestures 里：
             // 拆成两个 modifier 时内层会先消费按下事件，导致另一种手势失效
             .pointerInput(selectionMode) {
@@ -244,20 +242,18 @@ private fun PaperNoteCard(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // ---------- 第一行：日期 ----------
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = shift),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = note.editedOn.format(DateFormatter),
-                    color = InkMuted,
-                    fontSize = 11.sp,
-                )
-            }
+            // 直接放 Text，不再套一层 Row：Row 的垂直居中对齐会让 11sp 的日期
+            // 吃到 16dp 的默认行高，单行内容白白多出几 dp。
+            // lineHeight 压到 14sp，日期行整体从 ~16dp 收到 ~14dp。
+            Text(
+                text = note.editedOn.format(DateFormatter),
+                modifier = Modifier.padding(start = shift),
+                color = InkMuted,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+            )
 
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(7.dp))
 
             // ---------- 正文 ----------
             Text(
@@ -306,7 +302,7 @@ private fun PaperNoteCard(
                 if (selected) {
                     Text(
                         text = "✓",
-                        color = CardPaper,
+                        color = PaperWhite,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                     )

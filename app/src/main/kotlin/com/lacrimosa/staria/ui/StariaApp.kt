@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lacrimosa.staria.data.DiaryEntry
+import com.lacrimosa.staria.data.DarkMode
 import com.lacrimosa.staria.data.EditDraft
 import com.lacrimosa.staria.data.EditKind
 import com.lacrimosa.staria.data.Essay
@@ -33,7 +35,7 @@ import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.RecordCounts
 import com.lacrimosa.staria.data.SampleData
-import com.lacrimosa.staria.data.SettingsStore
+import com.lacrimosa.staria.data.ThemeColor
 import com.lacrimosa.staria.data.TrashItem
 import com.lacrimosa.staria.data.TrashKind
 import androidx.compose.foundation.layout.WindowInsets
@@ -53,6 +55,8 @@ import com.lacrimosa.staria.ui.component.ContentInsets
 import com.lacrimosa.staria.ui.component.CreateKind
 import com.lacrimosa.staria.ui.component.LocalContentInsets
 import com.lacrimosa.staria.ui.component.ScrollEdgeGap
+import com.lacrimosa.staria.ui.component.SlideDirection
+import com.lacrimosa.staria.ui.component.SlideScreen
 import com.lacrimosa.staria.ui.component.StariaBottomBar
 import com.lacrimosa.staria.ui.component.StariaTab
 import com.lacrimosa.staria.ui.component.LocalTooltipHost
@@ -67,10 +71,12 @@ import com.lacrimosa.staria.ui.profile.ProfileDrawer
 import com.lacrimosa.staria.ui.selection.SelectionState
 import com.lacrimosa.staria.ui.settings.SettingsScreen
 import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.think.EssayReaderPage
 import com.lacrimosa.staria.ui.think.ThinkScreen
+import com.lacrimosa.staria.ui.time.CalendarSheet
 import com.lacrimosa.staria.ui.time.TimeScreen
 import com.lacrimosa.staria.ui.trash.TrashScreen
 import java.time.LocalDate
@@ -80,6 +86,28 @@ import java.time.LocalDate
  */
 private fun nextId(existing: Collection<Long>): Long =
     (existing.maxOrNull() ?: 0L) + 1L
+
+/**
+ * 记住「最近一次非 null 值」的可变容器。
+ *
+ * 用于 SlideScreen 的退出动画：当 `visible` 因状态置 null 而变 false 时，
+ * 退场动画期间的 content 仍需要一份有效内容来画。普通 `remember {}` 缓存的是
+ * 快照，会随着 key 变化重建；这里用普通类字段直接覆盖，读取时始终拿到
+ * 「最后一次有效值」，不参与 Compose 快照系统，所以退出动画期间不会闪空。
+ */
+private class LastNonNull<T : Any>(initial: T?) {
+    var value: T? = initial
+
+    /** 写入当前值；为 null 时保持旧值不变。返回更新后的值。 */
+    fun update(current: T?): T? {
+        if (current != null) value = current
+        return value
+    }
+}
+
+@Composable
+private fun <T : Any> rememberLastNonNull(initial: T?): LastNonNull<T> =
+    remember { LastNonNull(initial) }
 
 /**
  * 回收站条目的内部 id。
@@ -137,7 +165,12 @@ private fun Essay.toTrash(): TrashItem = TrashItem(
  * tab 与头像都放在这里而不是各页面内部，避免各页重复实现导致行为不一致。
  */
 @Composable
-fun StariaApp() {
+fun StariaApp(
+    themeColor: ThemeColor,
+    darkMode: DarkMode,
+    onThemeColorChange: (ThemeColor) -> Unit,
+    onDarkModeChange: (DarkMode) -> Unit,
+) {
     val context = LocalContext.current
     val nicknameStore = remember { NicknameStore(context) }
 
@@ -150,6 +183,11 @@ fun StariaApp() {
 
     // 纸条展开浮层：放在根布局渲染，才能压暗并覆盖顶栏与底栏
     var expandedNote by remember { mutableStateOf<PaperNote?>(null) }
+
+    // 日历浮层：同样放根布局最外层渲染，遮罩才能覆盖顶栏与底栏。
+    // calendarPick 用于把选中的日期回传给时间页展开对应日记组。
+    var showCalendar by remember { mutableStateOf(false) }
+    var calendarPick by remember { mutableStateOf<LocalDate?>(null) }
 
     // 随笔查看页（二级全屏页面）。非空时整页覆盖，底栏与头像不出现
     var readerEssay by remember { mutableStateOf<Essay?>(null) }
@@ -172,11 +210,6 @@ fun StariaApp() {
     // 二级页面：星尘 / 设置。null 表示不展示
     var showTrash by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
-
-    // 设置项（主题色、深色模式）
-    val settingsStore = remember { SettingsStore(context) }
-    var themeColor by remember { mutableStateOf(settingsStore.loadThemeColor()) }
-    var darkMode by remember { mutableStateOf(settingsStore.loadDarkMode()) }
 
     // 多选状态。放在根布局是因为：
     // - 红色删除按钮要顶替新建按钮、与之同位置，只能由底栏渲染
@@ -295,18 +328,23 @@ fun StariaApp() {
     }
 
     // ---------- 编辑页：保存 ----------
-    // 日期一律沿用草稿里的创建日期，保存不刷新（用户确认的口径）
-    val onSaveDraft: (EditDraft) -> Unit = { draft ->
-        when (draft.kind) {
+    // 日期一律沿用草稿里的创建日期，保存不刷新（用户确认的口径）。
+    // 保存后**不退出**，停留在编辑页继续编辑，返回落盘后的真实 id。
+    // 编辑器内部用返回值更新 currentId：新建后再次保存走「编辑」分支，
+    // 不会重复新建一条。
+    val onSaveDraft: (EditDraft) -> Long = { draft ->
+        val finalId: Long = when (draft.kind) {
             EditKind.Diary -> {
                 val existing = draft.id?.let { id -> diaryEntries.firstOrNull { it.id == id } }
                 if (existing == null) {
+                    val newId = nextId(diaryEntries.map { it.id })
                     diaryEntries = diaryEntries + DiaryEntry(
-                        id = nextId(diaryEntries.map { it.id }),
+                        id = newId,
                         date = draft.date,
                         title = draft.title.ifBlank { "无题" },
                         body = draft.body,
                     )
+                    newId
                 } else {
                     diaryEntries = diaryEntries.map {
                         if (it.id == existing.id) {
@@ -318,18 +356,21 @@ fun StariaApp() {
                             it
                         }
                     }
+                    existing.id
                 }
             }
 
             EditKind.Excerpt -> {
                 val existing = draft.id?.let { id -> paperNotes.firstOrNull { it.id == id } }
                 if (existing == null) {
+                    val newId = nextId(paperNotes.map { it.id })
                     paperNotes = paperNotes + PaperNote(
-                        id = nextId(paperNotes.map { it.id }),
+                        id = newId,
                         text = draft.body,
                         source = draft.source.ifBlank { null },
                         editedOn = draft.date,
                     )
+                    newId
                 } else {
                     paperNotes = paperNotes.map {
                         if (it.id == existing.id) {
@@ -341,18 +382,21 @@ fun StariaApp() {
                             it
                         }
                     }
+                    existing.id
                 }
             }
 
             EditKind.Essay -> {
                 val existing = draft.id?.let { id -> essays.firstOrNull { it.id == id } }
                 if (existing == null) {
+                    val newId = nextId(essays.map { it.id })
                     essays = essays + Essay(
-                        id = nextId(essays.map { it.id }),
+                        id = newId,
                         date = draft.date,
                         title = draft.title.ifBlank { "无题" },
                         body = draft.body,
                     )
+                    newId
                 } else {
                     essays = essays.map {
                         if (it.id == existing.id) {
@@ -364,10 +408,15 @@ fun StariaApp() {
                             it
                         }
                     }
+                    existing.id
                 }
             }
         }
-        editDraft = null
+
+        // 保存后**不退出**，只返回落盘后的真实 id。
+        // EditorScreen 内部用该 id 更新自己的 currentId，
+        // 下次保存走「编辑」分支，不会重复新建。
+        finalId
     }
 
     // 悬浮层的真实占位高度：必须把系统栏算进去。
@@ -395,15 +444,23 @@ fun StariaApp() {
     // 玻璃控件（底栏、头像、新建栏、二级页顶栏、tooltip）通过 drawBackdrop
     // 重新绘制这块内容并施加模糊/折射，从而「透出」它们下面真正的内容。
     // 必须先画底色：不画的话，没有内容覆盖的区域在玻璃里会露出透明像素。
-    val glassBackdrop = rememberLayerBackdrop {
-        drawRect(PageBackground)
-        drawContent()
+    // 底色在 Composable 作用域先取出（PageBackground 现在是动态令牌），
+    // 再闭包捕获进 rememberLayerBackdrop 的绘制块。
+    // 用 key 包裹：切深色模式时底色变化，强制重建 backdrop，
+    // 否则 rememberLayerBackdrop 只录一次，玻璃透出的底色会停在旧值。
+    val backdropBaseColor = PageBackground
+    val glassBackdrop = key(backdropBaseColor) {
+        rememberLayerBackdrop {
+            drawRect(backdropBaseColor)
+            drawContent()
+        }
     }
 
     CompositionLocalProvider(
         LocalContentInsets provides contentInsets,
         LocalGlassBackdrop provides glassBackdrop,
         LocalTooltipHost provides tooltipHost,
+        LocalThemeColor provides themeColor,
     ) {
     Box(modifier = Modifier.fillMaxSize().background(PageBackground)) {
         // ---------- 内容层：铺满全屏 ----------
@@ -441,6 +498,8 @@ fun StariaApp() {
                             selection = selection,
                             // README：操作该页时若底栏展开则自动收起
                             onUserInteract = collapseBar,
+                            onOpenCalendar = { showCalendar = true },
+                            calendarPick = calendarPick,
                             onEdit = { entry: DiaryEntry ->
                                 // 进入编辑页时沿用该条的创建日期
                                 editDraft = EditDraft(
@@ -539,30 +598,29 @@ fun StariaApp() {
         )
 
         // ---------- 个人主页抽屉 ----------
-        if (profileVisible) {
-            ProfileDrawer(
-                visible = true,
-                nickname = nickname,
-                // 数量必须跟着当前三个列表走：新建、删除后要立刻对上，
-                // 不能再用 SampleData 里那份写死的示例值
-                counts = RecordCounts(
-                    // 与时间页一致：标记 deleted 的不计入
-                    diary = diaryEntries.count { !it.deleted },
-                    paper = paperNotes.size,
-                    essay = essays.size,
-                ),
-                onDismiss = { profileVisible = false },
-                onEditNickname = { editingNickname = true },
-                onOpenRecycleBin = {
-                    profileVisible = false
-                    showTrash = true
-                },
-                onOpenSettings = {
-                    profileVisible = false
-                    showSettings = true
-                },
-            )
-        }
+        // 从抽屉进入星尘/设置时**不关闭抽屉**：二级页面声明在其后（层级更高），
+        // 会覆盖在抽屉之上；返回时二级页面关闭，抽屉仍在后台，自然回到个人主页。
+        // 始终挂载，进出动画由 ProfileDrawer 内部的 AnimatedVisibility 管理。
+        ProfileDrawer(
+            visible = profileVisible,
+            nickname = nickname,
+            // 数量必须跟着当前三个列表走：新建、删除后要立刻对上，
+            // 不能再用 SampleData 里那份写死的示例值
+            counts = RecordCounts(
+                // 与时间页一致：标记 deleted 的不计入
+                diary = diaryEntries.count { !it.deleted },
+                paper = paperNotes.size,
+                essay = essays.size,
+            ),
+            onDismiss = { profileVisible = false },
+            onEditNickname = { editingNickname = true },
+            onOpenRecycleBin = {
+                showTrash = true
+            },
+            onOpenSettings = {
+                showSettings = true
+            },
+        )
 
         // ---------- 纸条展开浮层 ----------
         // 放在根布局最外层，才能压暗并覆盖顶栏与底栏
@@ -576,33 +634,57 @@ fun StariaApp() {
             )
         }
 
-        // ---------- 随笔查看页（二级全屏） ----------
-        // 覆盖在最上层，底栏与头像被完全遮住
-        readerEssay?.let { essay ->
-            EssayReaderPage(
-                essay = essay,
-                onBack = { readerEssay = null },
-                onEdit = {
-                    // 从查看页进入编辑：先收起查看页，编辑保存后回到列表
-                    readerEssay = null
-                    editDraft = EditDraft(
-                        kind = EditKind.Essay,
-                        id = essay.id,
-                        date = essay.date,
-                        title = essay.title,
-                        body = essay.body,
-                    )
-                },
-                onDelete = {
-                    trash = trash + essay.toTrash()
-                    essays = essays.filterNot { it.id == essay.id }
-                    readerEssay = null
+        // ---------- 日历浮层 ----------
+        // 与纸条展开浮层同样放在最外层，遮罩统一覆盖顶栏与底栏，
+        // 否则日历遮罩盖不住玻璃控件，白边会在压暗背景上异常突出。
+        if (showCalendar) {
+            CalendarSheet(
+                initialDate = calendarPick ?: LocalDate.now(),
+                diaryDates = diaryEntries
+                    .filterNot { it.deleted }
+                    .map { it.date }
+                    .toSet(),
+                onDismiss = { showCalendar = false },
+                onPick = { date ->
+                    showCalendar = false
+                    calendarPick = date
                 },
             )
         }
 
-        // ---------- 星尘（二级全屏） ----------
-        if (showTrash) {
+        // ---------- 随笔查看页（二级全屏，从右侧滑入/滑出） ----------
+        // 覆盖在最上层，底栏与头像被完全遮住
+        // 用 rememberLastNonNull：退出动画期间 content 仍拿到最后一次非 null 内容，
+        // 否则 readerEssay 置 null 的瞬间内容变空，滑出动画不可见。
+        val lastReaderEssay = rememberLastNonNull(readerEssay)
+        SlideScreen(visible = readerEssay != null, direction = SlideDirection.FromRight) {
+            val essay = lastReaderEssay.update(readerEssay)
+            if (essay != null) {
+                EssayReaderPage(
+                    essay = essay,
+                    onBack = { readerEssay = null },
+                    onEdit = {
+                        // 从查看页进入编辑：先收起查看页，编辑保存后回到列表
+                        readerEssay = null
+                        editDraft = EditDraft(
+                            kind = EditKind.Essay,
+                            id = essay.id,
+                            date = essay.date,
+                            title = essay.title,
+                            body = essay.body,
+                        )
+                    },
+                    onDelete = {
+                        trash = trash + essay.toTrash()
+                        essays = essays.filterNot { it.id == essay.id }
+                        readerEssay = null
+                    },
+                )
+            }
+        }
+
+        // ---------- 星尘（二级全屏，从左侧滑入/滑出） ----------
+        SlideScreen(visible = showTrash, direction = SlideDirection.FromLeft) {
             TrashScreen(
                 // 新删除的在上方
                 items = trash.sortedByDescending { it.deletedAt },
@@ -612,31 +694,30 @@ fun StariaApp() {
             )
         }
 
-        // ---------- 设置（二级全屏） ----------
-        if (showSettings) {
+        // ---------- 设置（二级全屏，从左侧滑入/滑出） ----------
+        SlideScreen(visible = showSettings, direction = SlideDirection.FromLeft) {
             SettingsScreen(
                 themeColor = themeColor,
                 darkMode = darkMode,
                 onBack = { showSettings = false },
-                onPickThemeColor = { color ->
-                    themeColor = color
-                    settingsStore.saveThemeColor(color)
-                },
-                onPickDarkMode = { mode ->
-                    darkMode = mode
-                    settingsStore.saveDarkMode(mode)
-                },
+                onPickThemeColor = onThemeColorChange,
+                onPickDarkMode = onDarkModeChange,
             )
         }
 
-        // ---------- 编辑页（二级全屏） ----------
+        // ---------- 编辑页（二级全屏，从右侧滑入/滑出） ----------
         // 声明在最后，压在查看页之上：从随笔查看页点编辑能直接进入
-        editDraft?.let { draft ->
-            EditorScreen(
-                initial = draft,
-                onExit = { editDraft = null },
-                onSave = onSaveDraft,
-            )
+        // 用 rememberLastNonNull：退出动画期间 content 仍拿到最后一次非 null 草稿。
+        val lastDraft = rememberLastNonNull(editDraft)
+        SlideScreen(visible = editDraft != null, direction = SlideDirection.FromRight) {
+            val draft = lastDraft.update(editDraft)
+            if (draft != null) {
+                EditorScreen(
+                    initial = draft,
+                    onExit = { editDraft = null },
+                    onSave = onSaveDraft,
+                )
+            }
         }
     }
 
@@ -659,6 +740,7 @@ fun StariaApp() {
     if (editingNickname) {
         NicknameDialog(
             initial = nickname,
+            themeColor = themeColor,
             onDismiss = { editingNickname = false },
             onConfirm = { newName ->
                 nickname = newName

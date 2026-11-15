@@ -1,7 +1,6 @@
 package com.lacrimosa.staria.ui.component
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -14,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -65,14 +65,23 @@ fun InteractiveGlassPanel(
     refractionScale: Float = 1f,
     enabled: Boolean = true,
     onClick: () -> Unit,
+    /**
+     * 玻璃层的额外垂直位移（px）。用于「本体平移」类动画（如新建按钮的向下惯性）。
+     * 必须放进 layerBlock（只平移玻璃层、采样背景不动），
+     * 若用外层 graphicsLayer.translationY 会把玻璃和背景错位、露出色块。
+     */
+    layerTranslationY: () -> Float = { 0f },
     content: @Composable BoxScope.() -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val progress = remember { Animatable(0f) }
-    // 仓库用的弹簧参数：阻尼 0.5、刚度 300，回弹很轻快
-    val spec = spring<Float>(dampingRatio = 0.5f, stiffness = 300f)
+    // 与底栏面板统一：临界阻尼（无过冲），刚度 1000，按下快速放大、松手平滑回弹
+    val spec = PressScaleSpec
 
     val inflatePx = with(LocalDensity.current) { pressInflate.toPx() }
+
+    // 降级底色在组合期取出（动态令牌）
+    val fallbackColor = PaperWhite
 
     val body = if (backdrop != null) {
         modifier
@@ -80,7 +89,8 @@ fun InteractiveGlassPanel(
                 backdrop = backdrop,
                 shape = { shape },
                 effects = { stariaGlassEffects(refractionScale) },
-                // 缩放写在 layerBlock 里，背景采样才不会跟着动
+                // 缩放 + 平移写在 layerBlock 里，背景采样才不会跟着动。
+                // 内容用下方 graphicsLayer 同步，二者参数一致。
                 layerBlock = {
                     val p = progress.value
                     if (p > 0f) {
@@ -93,10 +103,11 @@ fun InteractiveGlassPanel(
                         scaleX = s
                         scaleY = s
                     }
+                    translationY = layerTranslationY()
                 },
             )
     } else {
-        modifier.background(PaperWhite.copy(alpha = GlassSpec.FALLBACK_ALPHA), shape)
+        modifier.background(fallbackColor.copy(alpha = GlassSpec.FALLBACK_ALPHA), shape)
     }
 
     Box(
@@ -120,7 +131,28 @@ fun InteractiveGlassPanel(
                 }
             },
     ) {
-        content()
+        // 内容跟随玻璃层同步缩放 + 平移：倍率与位移和 layerBlock 完全一致。
+        // 用 graphicsLayer 包住 content，图标/文字随面板一起扩大回弹、一起平移。
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    val p = progress.value
+                    if (p > 0f) {
+                        val maxScale = if (size.width > 0f) {
+                            (size.width + inflatePx * 2) / size.width
+                        } else {
+                            1f
+                        }
+                        val s = 1f + (maxScale - 1f) * p
+                        scaleX = s
+                        scaleY = s
+                    }
+                    translationY = layerTranslationY()
+                },
+        ) {
+            content()
+        }
     }
 }
 
@@ -133,6 +165,7 @@ fun InteractiveGlassPanel(
     refractionScale: Float = 1f,
     enabled: Boolean = true,
     onClick: () -> Unit,
+    layerTranslationY: () -> Float = { 0f },
     content: @Composable BoxScope.() -> Unit,
 ) = InteractiveGlassPanel(
     backdrop = LocalGlassBackdrop.current,
@@ -142,5 +175,6 @@ fun InteractiveGlassPanel(
     refractionScale = refractionScale,
     enabled = enabled,
     onClick = onClick,
+    layerTranslationY = layerTranslationY,
     content = content,
 )

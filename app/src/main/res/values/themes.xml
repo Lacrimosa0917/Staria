@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Staria" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <!--
+            窗口背景与 Compose 里的 PageBackground(#F5F5F5) 保持一致。
+            点图标到首帧之间系统显示的就是这个颜色，如果留白（#FFFFFF），
+            开屏动画出现时会先闪一下白。
+        -->
+        <item name="android:windowBackground">@color/window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>

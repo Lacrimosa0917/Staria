@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">星笺</string>
     <string name="slogan">星笺</string>
+    <!-- 开屏动画下方的说明文字 -->
+    <string name="splash_tagline">你的纸上星空</string>
 
     <string name="tab_home">首页</string>
     <string name="tab_time">时间</string>

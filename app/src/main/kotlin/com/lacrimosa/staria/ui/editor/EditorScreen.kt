@@ -47,12 +47,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.EditDraft
 import com.lacrimosa.staria.data.EditKind
-import com.lacrimosa.staria.ui.component.ActionTooltip
+import com.lacrimosa.staria.ui.component.AnchorCorner
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.GlassCircleButton
 import com.lacrimosa.staria.ui.component.GlassPill
 import com.lacrimosa.staria.ui.component.GlassPillIcon
+import com.lacrimosa.staria.ui.component.PageGlassLayer
 import com.lacrimosa.staria.ui.component.TooltipAction
+import com.lacrimosa.staria.ui.component.TooltipSurface
 import com.lacrimosa.staria.ui.icon.IconClose
 import com.lacrimosa.staria.ui.icon.IconDiary
 import com.lacrimosa.staria.ui.icon.IconEssay
@@ -68,10 +70,11 @@ import com.lacrimosa.staria.ui.theme.HairLine
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
-import com.lacrimosa.staria.ui.theme.PageBackground
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
+import com.lacrimosa.staria.ui.theme.accent
 
 /** 圆形按键直径。保存 / 退出都用它，与查看页保持一致。 */
 private val ButtonSize = SecondaryButtonSize
@@ -119,7 +122,7 @@ private fun EditKind.icon(): ImageVector = when (this) {
 fun EditorScreen(
     initial: EditDraft,
     onExit: () -> Unit,
-    onSave: (EditDraft) -> Unit,
+    onSave: (EditDraft) -> Long,
     modifier: Modifier = Modifier,
 ) {
     val history = remember(initial) {
@@ -130,6 +133,11 @@ fun EditorScreen(
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showKindTooltip by remember { mutableStateOf(false) }
     var kindAnchor by remember { mutableStateOf(Offset.Zero) }
+
+    // 当前条目 id。新建时为空，保存后由 onSave 返回的真实 id 更新。
+    // 用独立 state 而不是改 initial，避免 remember(initial) 重建编辑器、
+    // 清空输入与光标。
+    var currentId by remember(initial) { mutableStateOf(initial.id) }
 
     val bodyScroll = rememberScrollState()
 
@@ -142,6 +150,7 @@ fun EditorScreen(
 
     fun buildDraft(): EditDraft = initial.copy(
         kind = kind,
+        id = currentId,
         title = history.title,
         source = history.source,
         body = history.body,
@@ -149,11 +158,21 @@ fun EditorScreen(
         date = initial.date,
     )
 
+    fun doSave() {
+        currentId = onSave(buildDraft())
+        history.markSaved()
+    }
+
     // 系统返回键也走「未保存」拦截，行为与左上角退出键一致。
     // 这里注册的处理器晚于根布局，因此会优先拿到返回事件。
     androidx.activity.compose.BackHandler { requestExit() }
 
-    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
+    // PageGlassLayer：本页自己录一份 backdrop，让顶栏的退出/撤回/保存
+    // 透出的是本页正文，而不是根布局那层（那只录了四个 tab 的内容）。
+    // content 会被录进 backdrop；chrome 里的玻璃控件不录制（否则画自己、栈溢出）。
+    PageGlassLayer(
+        modifier = modifier,
+        content = {
         // ---------- 内容层 ----------
         Column(
             modifier = Modifier
@@ -174,7 +193,11 @@ fun EditorScreen(
                 Text(
                     text = kind.label(),
                     modifier = Modifier
-                        .onGloballyPositioned { kindAnchor = it.positionInWindow() }
+                        .onGloballyPositioned { coords ->
+                            val p = coords.positionInWindow()
+                            // 锚点取文字左下角：tooltip 用 TopLeft 从这里向下展开
+                            kindAnchor = Offset(p.x, p.y + coords.size.height)
+                        }
                         .pointerInput(Unit) {
                             detectTapGestures(onLongPress = { showKindTooltip = true })
                         },
@@ -256,7 +279,8 @@ fun EditorScreen(
             // 底部留白：滚到底时正文停在键盘/导航之上
             Spacer(Modifier.height(120.dp))
         }
-
+        },
+        chrome = {
         // ---------- 左上角：退出 ----------
         Box(
             modifier = Modifier
@@ -286,29 +310,33 @@ fun EditorScreen(
                 onRedo = { history.redo() },
             )
             Spacer(Modifier.width(10.dp))
-            SaveButton(onClick = { onSave(buildDraft()) })
+            SaveButton(onClick = { doSave() })
         }
-    }
 
-    // ---------- 切换类型的 tooltip ----------
-    if (showKindTooltip) {
-        ActionTooltip(
-            anchor = kindAnchor,
-            actions = EditKind.entries
-                .filterNot { it == kind }
-                .map { target ->
-                    TooltipAction(
-                        label = "改为${target.label()}",
-                        icon = target.icon(),
-                        onClick = {
-                            showKindTooltip = false
-                            kind = target
-                        },
-                    )
-                },
-            onDismiss = { showKindTooltip = false },
-        )
-    }
+        // ---------- 切换类型的 tooltip（向下展开，采样本页背景） ----------
+        // 与设置页/长按菜单一致：直接在 chrome 内用 TooltipSurface，
+        // 走本页 backdrop（否则 ActionTooltip 会转发根布局、采到 tab 内容）。
+        if (showKindTooltip) {
+            TooltipSurface(
+                anchor = kindAnchor,
+                actions = EditKind.entries
+                    .filterNot { it == kind }
+                    .map { target ->
+                        TooltipAction(
+                            label = "改为${target.label()}",
+                            icon = target.icon(),
+                            onClick = {
+                                showKindTooltip = false
+                                kind = target
+                            },
+                        )
+                    },
+                onDismiss = { showKindTooltip = false },
+                preferredCorner = AnchorCorner.TopLeft,
+            )
+        }
+        },
+    )
 
     // ---------- 未保存确认 ----------
     if (showDiscardDialog) {
@@ -317,7 +345,7 @@ fun EditorScreen(
             onDiscard = onExit,
             onSave = {
                 showDiscardDialog = false
-                onSave(buildDraft())
+                doSave()
             },
         )
     }
@@ -430,7 +458,7 @@ private fun CircleButton(
     )
 }
 
-/** 保存按键：实心墨色，与其它空心圆钮区分主次。 */
+/** 保存按键：实心，颜色跟随主题色（简约白回落为墨色）。 */
 @Composable
 private fun SaveButton(onClick: () -> Unit) {
     GlassCircleButton(
@@ -438,6 +466,7 @@ private fun SaveButton(onClick: () -> Unit) {
         description = "保存",
         onClick = onClick,
         filled = true,
+        fillColor = LocalThemeColor.current.accent(),
     )
 }
 

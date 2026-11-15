@@ -20,8 +20,14 @@ class TextHistory(
 ) {
     private data class Snapshot(val title: String, val source: String, val body: String)
 
-    /** 初始快照，用于判定「有没有改过」。 */
-    private val initial = Snapshot(title, source, body)
+    /**
+     * 初始快照，用于判定「有没有改过」。保存后由 [markSaved] 更新。
+     *
+     * 必须是 [mutableStateOf]：`isDirty()` 依赖它，保存后更新 initial
+     * 需要触发重组，否则保存后 `dirty` 仍是旧值（true），
+     * 点返回仍会误弹「未保存」。
+     */
+    private var initial by mutableStateOf(Snapshot(title, source, body))
 
     private val undoStack = ArrayDeque<Snapshot>()
     private val redoStack = ArrayDeque<Snapshot>()
@@ -87,6 +93,20 @@ class TextHistory(
 
     /** 与初始状态相比是否有改动。 */
     fun isDirty(): Boolean = current() != initial
+
+    /**
+     * 标记为「已保存」：把当前状态当作新的初始快照，并清空撤销/重做栈。
+     *
+     * 编辑页现在「保存后不退出」，保存完成调用它让脏标记归零，
+     * 下次点退出不再误弹「未保存」；同时清空栈避免撤销回退到保存前、
+     * 造成脏标记与历史自相矛盾。
+     */
+    fun markSaved() {
+        val saved = current()
+        initial = saved
+        undoStack.clear()
+        redoStack.clear()
+    }
 
     private companion object {
         const val MAX_HISTORY = 100

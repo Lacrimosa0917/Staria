@@ -4,14 +4,15 @@ import androidx.compose.foundation.background
 import com.lacrimosa.staria.ui.theme.ActionRadius
 import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.BorderSelected
-import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.SelectionBoxRadius
 import com.lacrimosa.staria.ui.theme.SelectionBoxSize
+import com.lacrimosa.staria.ui.theme.accent
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,10 +54,15 @@ fun DeleteConfirmDialog(
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
+    // Dialog 是独立窗口，CompositionLocal 不跨窗口传递，
+    // 在 Dialog 外读取主题色，再在窗口内重新 provide。
+    val themeColor = LocalThemeColor.current
+
     Dialog(
         onDismissRequest = onCancel,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        CompositionLocalProvider(LocalThemeColor provides themeColor) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -150,6 +157,7 @@ fun DeleteConfirmDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -159,10 +167,12 @@ private fun DialogButton(
     primary: Boolean,
     onClick: () -> Unit,
 ) {
+    // 主按钮（确认）用主题色：简约白回落为墨色，其余主题取其强调色
+    val accent = LocalThemeColor.current.accent()
     Box(
         modifier = Modifier
             .background(
-                color = if (primary) Danger else Color.Transparent,
+                color = if (primary) accent else Color.Transparent,
                 shape = RoundedCornerShape(ActionRadius),
             )
             .then(

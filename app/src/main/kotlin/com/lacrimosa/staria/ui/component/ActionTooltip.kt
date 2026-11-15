@@ -1,6 +1,7 @@
 package com.lacrimosa.staria.ui.component
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,7 +21,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -34,14 +39,16 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.kyant.backdrop.Backdrop
 import com.lacrimosa.staria.ui.theme.Danger
+import com.lacrimosa.staria.ui.theme.GlassSpec
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PopupRadius
 import com.lacrimosa.staria.ui.theme.supportsRenderEffect
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 private val TooltipWidth = 148.dp
-private val TooltipItemHeight = 34.dp
+private val TooltipItemHeight = 30.dp
 private val TooltipPadV = 4.dp
 private val TooltipMargin = 6.dp
 
@@ -118,6 +125,9 @@ fun ActionTooltip(
  *
  * 与 [ActionTooltip] 分开的原因：根布局要用它来画菜单，
  * 如果直接复用 [ActionTooltip]，根布局又会把请求转发回自己，形成自触发循环。
+ *
+ * 展开 / 收起动画都在这里统一管理：进入用带过冲的弹簧（展开后小幅回弹），
+ * 收起同样带弹性；收起动画播完才回调 [onDismiss]，页面才会真正移除本组合。
  */
 @Composable
 fun TooltipSurface(
@@ -128,12 +138,47 @@ fun TooltipSurface(
 ) {
     if (actions.isEmpty()) return
 
+    // 0 = 完全收起，1 = 完全展开。过冲时 > 1。
+    val appear = remember { Animatable(0f) }
+    // 正在播放收起动画。动画期间内容仍需渲染，结束后才 onDismiss。
+    var closing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // 进入：快速展开 + 小幅度过冲回弹（与随笔查看页「更多」菜单统一参数）
+    LaunchedEffect(Unit) {
+        appear.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = 0.55f,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        )
+    }
+
+    // 请求收起：先播退出动画，结束再执行回调 + onDismiss。
+    fun requestClose(afterClose: () -> Unit = {}) {
+        if (closing) return
+        closing = true
+        scope.launch {
+            appear.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = 0.55f,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            )
+            afterClose()
+            onDismiss()
+        }
+    }
+
     val backdrop = LocalGlassBackdrop.current
     if (backdrop != null && supportsRenderEffect) {
         InWindowTooltip(
             actions = actions,
             anchor = anchor,
-            onDismiss = onDismiss,
+            appear = appear.value,
+            requestClose = ::requestClose,
             backdrop = backdrop,
             preferredCorner = preferredCorner,
         )
@@ -141,7 +186,8 @@ fun TooltipSurface(
         PopupTooltip(
             actions = actions,
             anchor = anchor,
-            onDismiss = onDismiss,
+            appear = appear.value,
+            requestClose = ::requestClose,
             preferredCorner = preferredCorner,
         )
     }
@@ -157,18 +203,16 @@ fun TooltipSurface(
 private fun InWindowTooltip(
     actions: List<TooltipAction>,
     anchor: Offset,
-    onDismiss: () -> Unit,
+    appear: Float,
+    requestClose: (afterClose: () -> Unit) -> Unit,
     backdrop: Backdrop,
     preferredCorner: AnchorCorner,
 ) {
     val density = LocalDensity.current
 
-    // 进入动画：Compose 首次组合即为目标值，所以用一个从 0 起跳的 Animatable
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        appear.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 420f))
-    }
-    val scale = 0.92f + 0.08f * appear.value
+    // 过冲时 appear > 1，scale 会短暂超过 1 再回落，形成「展开后小幅回弹」。
+    val scale = 0.92f + 0.08f * appear
+    val alpha = appear.coerceIn(0f, 1f)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val screenW = constraints.maxWidth.toFloat()
@@ -186,7 +230,7 @@ private fun InWindowTooltip(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss,
+                    onClick = { requestClose {} },
                 ),
         )
 
@@ -196,17 +240,28 @@ private fun InWindowTooltip(
             // 面板尺寸小、圆角 12dp，折射带按 0.6 收窄避免边缘断裂
             refractionScale = 0.6f,
             edgeHighlight = 1.dp,
+            // tooltip 专用：更高的模糊 + 一层薄蒙层，保证菜单文字可读
+            blurDp = GlassSpec.TOOLTIP_BLUR_DP,
+            surfaceAlpha = GlassSpec.TOOLTIP_SURFACE_ALPHA,
+            // 弹性缩放只作用于玻璃层（layerBlock），采样到的背景阴影不动，
+            // 否则阴影跟着面板一起弹，很突兀。
+            layerBlock = {
+                scaleX = scale
+                scaleY = scale
+            },
             modifier = Modifier
                 .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
                 .width(TooltipWidth)
-                .graphicsLayer {
-                    alpha = appear.value
-                    scaleX = scale
-                    scaleY = scale
-                }
+                .graphicsLayer { this.alpha = alpha }
                 .padding(vertical = TooltipPadV),
         ) {
-            TooltipItems(actions = actions, onDismiss = onDismiss)
+            // 内容与玻璃层用相同倍率缩放，才能跟玻璃边缘对齐。
+            Box(modifier = Modifier.graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }) {
+                TooltipItems(actions = actions, requestClose = requestClose)
+            }
         }
     }
 }
@@ -216,22 +271,19 @@ private fun InWindowTooltip(
 private fun PopupTooltip(
     actions: List<TooltipAction>,
     anchor: Offset,
-    onDismiss: () -> Unit,
+    appear: Float,
+    requestClose: (afterClose: () -> Unit) -> Unit,
     preferredCorner: AnchorCorner,
 ) {
     val density = LocalDensity.current
 
-    // 低版本没有 RenderEffect，但动画仍然要有：淡入 + 轻微缩放
-    val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        appear.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 420f))
-    }
-    val scale = 0.92f + 0.08f * appear.value
+    val scale = 0.92f + 0.08f * appear
+    val alpha = appear.coerceIn(0f, 1f)
 
     Popup(
         alignment = Alignment.TopStart,
         offset = IntOffset.Zero,
-        onDismissRequest = onDismiss,
+        onDismissRequest = { requestClose {} },
         properties = PopupProperties(focusable = false),
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -249,24 +301,25 @@ private fun PopupTooltip(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onDismiss,
+                        onClick = { requestClose {} },
                     ),
             )
 
             GlassPanel(
                 backdrop = null,
                 shape = RoundedCornerShape(PopupRadius),
+                surfaceAlpha = GlassSpec.TOOLTIP_SURFACE_ALPHA,
                 modifier = Modifier
                     .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
                     .width(TooltipWidth)
                     .graphicsLayer {
-                        alpha = appear.value
+                        this.alpha = alpha
                         scaleX = scale
                         scaleY = scale
                     }
                     .padding(vertical = TooltipPadV),
             ) {
-                TooltipItems(actions = actions, onDismiss = onDismiss)
+                TooltipItems(actions = actions, requestClose = requestClose)
             }
         }
     }
@@ -275,7 +328,7 @@ private fun PopupTooltip(
 @Composable
 private fun TooltipItems(
     actions: List<TooltipAction>,
-    onDismiss: () -> Unit,
+    requestClose: (afterClose: () -> Unit) -> Unit,
 ) {
     Column {
         actions.forEach { action ->
@@ -286,10 +339,10 @@ private fun TooltipItems(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) {
-                        onDismiss()
-                        action.onClick()
+                        // 先播收起动画，结束再执行动作 + 关闭
+                        requestClose { action.onClick() }
                     }
-                    .padding(horizontal = 13.dp, vertical = 8.dp),
+                    .padding(horizontal = 13.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(

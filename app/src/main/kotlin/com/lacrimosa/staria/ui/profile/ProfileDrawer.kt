@@ -25,10 +25,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -41,11 +43,11 @@ import com.lacrimosa.staria.ui.icon.IconSettings
 import com.lacrimosa.staria.ui.icon.IconStarDust
 import androidx.compose.material3.Icon
 import com.lacrimosa.staria.ui.theme.Border
-import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.PageBackground
+import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.PanelRadius
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -74,29 +76,48 @@ fun ProfileDrawer(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (!visible) return
-
-    // 0 = 完全收起，1 = 完全展开
+    // 0 = 完全收起，1 = 完全展开。遮罩与抽屉共用它：
+    // - 遮罩 alpha = 0.28 * progress，只淡入淡出、不位移（原地出现）
+    // - 抽屉 translationX 由 progress 驱动，从左侧滑入 / 向左滑出
     val progress = remember { Animatable(0f) }
 
-    LaunchedEffect(Unit) {
-        progress.animateTo(
-            targetValue = 1f,
-            // 不能用 LowBouncy：过冲时 translationX 会变成正值，
-            // 抽屉右侧越过屏幕左缘，左侧就会露出下一层页面。
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
-        )
+    // 退出动画播完后才真正移除。visible 变 false 时不能立即 return，
+    // 否则看不到滑出动画；也不能一直 return（那会挡住下层点击）。
+    var actuallyGone by remember { mutableStateOf(!visible) }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            actuallyGone = false
+            progress.snapTo(0f)
+            progress.animateTo(
+                targetValue = 1f,
+                // 不能用 LowBouncy：过冲时 translationX 会变成正值，
+                // 抽屉右侧越过屏幕左缘，左侧就会露出下一层页面。
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            )
+        } else {
+            progress.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 260),
+            )
+            actuallyGone = true
+        }
     }
+
+    if (actuallyGone) return
 
     Box(modifier = modifier.fillMaxSize()) {
         // ---- 右侧 1/4：压暗的当前页面，点击收起 ----
+        // 遮罩原地淡入淡出，不参与抽屉的水平位移。
+        // 深度统一为 Scrim（与纸条页卡片展开、日历展开一致）。
+        val scrimColor = Scrim
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.28f * progress.value))
+                .background(scrimColor.copy(alpha = scrimColor.alpha * progress.value))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -207,8 +228,8 @@ private fun CountsCard(counts: RecordCounts) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp)
-            .background(CardPaper, RoundedCornerShape(PanelRadius))
-            .border(1.dp, Border, RoundedCornerShape(PanelRadius))
+            // 纯白卡面，不描边：与抽屉 #F5F5F5 底色的层次只靠色差
+            .background(PaperWhite, RoundedCornerShape(PanelRadius))
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

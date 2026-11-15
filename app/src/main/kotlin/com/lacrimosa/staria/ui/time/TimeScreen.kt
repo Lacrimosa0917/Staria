@@ -47,15 +47,18 @@ import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.LocalContentInsets
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.component.navFirstItemLeftX
+import java.time.LocalDate
+import kotlin.comparisons.compareByDescending
 import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
 import com.lacrimosa.staria.ui.icon.IconTrash
 import com.lacrimosa.staria.ui.selection.SelectionState
 import java.time.format.DateTimeFormatter
-import com.lacrimosa.staria.ui.theme.Axis
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PaperWhite
+import com.lacrimosa.staria.ui.theme.accent
 
 /**
  * 时间轴列宽占屏幕比例。
@@ -109,20 +112,35 @@ fun TimeScreen(
     onEdit: (DiaryEntry) -> Unit = {},
     onDelete: (DiaryEntry) -> Unit = {},
     modifier: Modifier = Modifier,
+    /** 请求打开日历浮层。浮层由根布局在最外层渲染，遮罩才能盖住顶栏与底栏。 */
+    onOpenCalendar: () -> Unit = {},
+    /** 日历选中的日期（由根布局回传）。非 null 时展开对应日记组。 */
+    calendarPick: LocalDate? = null,
 ) {
     val groups = remember(entries) {
         entries
             .filterNot { it.deleted }
             .groupBy { it.date }
-            .toSortedMap()
+            // 新的日期在上方（降序）
+            .toSortedMap(compareByDescending { it })
             .map { (date, list) -> DiaryGroup(date, list) }
     }
 
     var expandedId by remember { mutableStateOf<Long?>(null) }
-    var showCalendar by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<DiaryEntry?>(null) }
     var skipDeleteConfirm by remember { mutableStateOf(false) }
     var dontAskAgain by remember { mutableStateOf(false) }
+
+    // 根布局回传的日历选中日期：展开对应日记组
+    LaunchedEffect(calendarPick) {
+        if (calendarPick != null) {
+            val idx = groups.indexOfFirst { !it.date.isBefore(calendarPick) }
+                .let { if (it == -1) groups.lastIndex else it }
+            if (idx >= 0) {
+                expandedId = groups[idx].entries.firstOrNull()?.id
+            }
+        }
+    }
 
     // 长按唤起的 tooltip（与纸条页共用 ActionTooltip）
     var tooltipEntry by remember { mutableStateOf<DiaryEntry?>(null) }
@@ -165,50 +183,14 @@ fun TimeScreen(
 
         // 顶部留白从根布局提供的真实 inset 取，轴线起笔要与之对齐
         val insets = LocalContentInsets.current
-        val topPadPx = with(LocalDensity.current) { insets.top.toPx() }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // 不足一屏时上方留白，效果即「从上方截断」（底部对齐）
-            Spacer(modifier = Modifier.weight(1f))
+            // 轴线颜色与节点用主题色（简约白回落墨色）
+            val accent = LocalThemeColor.current.accent()
 
+            // 滚动容器：轴线 Canvas 作为背景层放进滚动内容里，
+            // 让它随节点一起滚动，不再固定在原地与节点脱节。
             Box(modifier = Modifier.fillMaxWidth()) {
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    if (groupHeights.isEmpty()) return@Canvas
-
-                    val x = axisX.toPx()
-                    val stroke = 1.dp.toPx()
-                    val dotCenterOffset = DotTop.toPx() + 3.5.dp.toPx()
-                    val capPx = 14.dp.toPx()
-
-                    var cursor = topPadPx
-                    groupHeights.forEachIndexed { index, groupHeight ->
-                        val dotY = cursor + dotCenterOffset
-                        val isFirst = index == 0
-                        val isLast = index == groupHeights.lastIndex
-
-                        val startY = if (isFirst) (dotY - capPx).coerceAtLeast(0f) else dotY
-                        drawLine(
-                            color = Axis,
-                            start = Offset(x, startY),
-                            end = Offset(x, dotY),
-                            strokeWidth = stroke,
-                        )
-
-                        cursor += groupHeight
-
-                        val endY = when {
-                            isLast -> (dotY + capPx).coerceAtMost(size.height)
-                            else -> cursor
-                        }
-                        drawLine(
-                            color = Axis,
-                            start = Offset(x, dotY),
-                            end = Offset(x, endY),
-                            strokeWidth = stroke,
-                        )
-                    }
-                }
-
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -224,65 +206,85 @@ fun TimeScreen(
                             }
                         },
                 ) {
-                    Spacer(Modifier.height(insets.top))
+                    // 滚动内容整体：Canvas 铺满内容高度，轴线随之移动
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Canvas(modifier = Modifier.matchParentSize()) {
+                            if (groupHeights.isEmpty()) return@Canvas
 
-                    groups.forEachIndexed { index, group ->
-                        Box(
-                            modifier = Modifier.onSizeChanged { size ->
-                                if (index >= groupHeights.size) {
-                                    groupHeights.add(size.height)
-                                } else {
-                                    groupHeights[index] = size.height
+                            val x = axisX.toPx()
+                            val stroke = 1.dp.toPx()
+                            val dotCenterOffset = DotTop.toPx() + 3.5.dp.toPx()
+                            // 轴线在下一个节点圆点前截断的量：圆点半径 + 间隙
+                            val dotCut = 9.dp.toPx()
+                            // 轴线起点：顶部 inset + 第一个节点圆心
+                            val topPadPx = insets.top.toPx()
+
+                            var cursor = topPadPx
+                            groupHeights.forEachIndexed { index, groupHeight ->
+                                val dotY = cursor + dotCenterOffset
+                                val isLast = index == groupHeights.lastIndex
+
+                                cursor += groupHeight
+
+                                // 末节点到自身为止；其余连到下一个节点圆点前一小段处截断
+                                val endY = if (isLast) dotY else cursor + dotCenterOffset - dotCut
+                                drawLine(
+                                    color = accent,
+                                    start = Offset(x, dotY),
+                                    end = Offset(x, endY),
+                                    strokeWidth = stroke,
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Spacer(Modifier.height(insets.top))
+
+                            groups.forEachIndexed { index, group ->
+                                Box(
+                                    modifier = Modifier.onSizeChanged { size ->
+                                        if (index >= groupHeights.size) {
+                                            groupHeights.add(size.height)
+                                        } else {
+                                            groupHeights[index] = size.height
+                                        }
+                                    },
+                                ) {
+                                    TimelineGroup(
+                                        group = group,
+                                        axisX = axisX,
+                                        axisColumnWidth = dateColumnWidth,
+                                        expandedId = if (selection.isActive) null else expandedId,
+                                        selection = selection,
+                                        onClickTitle = { entry ->
+                                            onUserInteract()
+                                            if (selection.isActive) {
+                                                selection.toggle(entry.id)
+                                            } else {
+                                                expandedId = if (expandedId == entry.id) null else entry.id
+                                            }
+                                        },
+                                        onLongPressTitle = { entry, pos ->
+                                            onUserInteract()
+                                            if (!selection.isActive) {
+                                                tooltipAnchor = pos
+                                                tooltipEntry = entry
+                                            }
+                                        },
+                                        onLongPressDate = {
+                                            onUserInteract()
+                                            onOpenCalendar()
+                                        },
+                                    )
                                 }
-                            },
-                        ) {
-                            TimelineGroup(
-                                group = group,
-                                axisX = axisX,
-                                axisColumnWidth = dateColumnWidth,
-                                expandedId = if (selection.isActive) null else expandedId,
-                                selection = selection,
-                                onClickTitle = { entry ->
-                                    onUserInteract()
-                                    if (selection.isActive) {
-                                        selection.toggle(entry.id)
-                                    } else {
-                                        expandedId = if (expandedId == entry.id) null else entry.id
-                                    }
-                                },
-                                onLongPressTitle = { entry, pos ->
-                                    onUserInteract()
-                                    if (!selection.isActive) {
-                                        tooltipAnchor = pos
-                                        tooltipEntry = entry
-                                    }
-                                },
-                                onLongPressDate = {
-                                    onUserInteract()
-                                    showCalendar = true
-                                },
-                            )
+                            }
+
+                            // 滚到底时最后一组停在悬浮底栏上方
+                            Spacer(Modifier.height(insets.bottom))
                         }
                     }
-
-                    // 滚到底时最后一组停在悬浮底栏上方
-                    Spacer(Modifier.height(insets.bottom))
                 }
             }
-        }
-
-        if (showCalendar) {
-            CalendarSheet(
-                onDismiss = { showCalendar = false },
-                onPick = { date ->
-                    showCalendar = false
-                    val idx = groups.indexOfFirst { !it.date.isBefore(date) }
-                        .let { if (it == -1) groups.lastIndex else it }
-                    if (idx >= 0) {
-                        expandedId = groups[idx].entries.firstOrNull()?.id
-                    }
-                },
-            )
         }
 
         pendingDelete?.let { entry ->
@@ -361,13 +363,15 @@ private fun TimelineGroup(
         // ---------- 左：圆点 + 日期 ----------
         // 固定宽度，保证"时间轴加日期"整体不超过屏幕左侧 1/4
         Box(modifier = Modifier.width(axisColumnWidth)) {
+            // 节点主题色（简约白回落墨色）
+            val nodeColor = LocalThemeColor.current.accent()
             // 圆点压在轴线上（白底先铺一层，形成截断的视觉）
             Box(
                 modifier = Modifier
                     .padding(start = axisX - 3.5.dp, top = DotTop)
                     .size(7.dp)
                     .background(PaperWhite, CircleShape)
-                    .background(Ink, CircleShape),
+                    .background(nodeColor, CircleShape),
             )
 
             Text(

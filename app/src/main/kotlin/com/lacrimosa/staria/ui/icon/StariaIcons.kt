@@ -9,7 +9,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathBuilder
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
-import com.lacrimosa.staria.ui.theme.Ink
 
 /**
  * 图标统一规格：24dp 画布、纯描边、墨色线条、圆头圆角、线宽 1.6。
@@ -21,8 +20,10 @@ import com.lacrimosa.staria.ui.theme.Ink
  *   这里统一按 0.5 等比换算到 24 画布，线宽仍取 1.6 —— 与未替换的图标保持同一笔画粗细。
  * - **项目自绘**：加号、关闭、勾、小铅笔、右尖括号、多选清单、更多、占位。
  *
- * 颜色全部走 [Ink]；实际显示时由调用方传 `tint`，这就是文档要求的「换色接口」——
- * 图标本身不绑定主题色，换主题色时只需要改 tint。
+ * 颜色内部用不透明的 [Color.Black] 占位：`Icon` 的 `tint` 只作用于不透明像素，
+ * 所以 path 里必须是不透明色才能被 tint 统一覆盖（`Color.Unspecified` 是透明的，
+ * tint 不会生效）。实际显示颜色完全由调用方传 `tint` 决定。
+ * 深色模式下由 tint（通常传 [Ink]，即白）统一着色。
  */
 private const val STROKE_WIDTH = 1.6f
 
@@ -41,7 +42,7 @@ private fun build(
 ).apply {
     path(
         fill = null,
-        stroke = SolidColor(Ink),
+        stroke = SolidColor(Color.Black),
         strokeLineWidth = STROKE_WIDTH,
         strokeLineCap = StrokeCap.Round,
         strokeLineJoin = StrokeJoin.Round,
@@ -72,7 +73,7 @@ private fun buildFilled(
     viewportHeight = 24f,
 ).apply {
     path(
-        fill = SolidColor(Ink),
+        fill = SolidColor(Color.Black),
         fillAlpha = 1f,
         stroke = null,
         strokeAlpha = 1f,
@@ -85,7 +86,7 @@ private fun buildFilled(
     if (detail != null) {
         path(
             fill = null,
-            stroke = SolidColor(Ink),
+            stroke = SolidColor(Color.Black),
             strokeLineWidth = STROKE_WIDTH,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round,
@@ -664,7 +665,7 @@ val IconMore: ImageVector by lazy {
         listOf(6f, 12f, 18f).forEach { cx ->
             path(
                 fill = null,
-                stroke = SolidColor(Ink),
+                stroke = SolidColor(Color.Black),
                 strokeLineWidth = 2.4f,
                 strokeLineCap = StrokeCap.Round,
                 pathBuilder = {

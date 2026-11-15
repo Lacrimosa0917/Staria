@@ -1,7 +1,7 @@
 package com.lacrimosa.staria.ui.component
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -72,8 +72,11 @@ import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PaperWhite
+import com.lacrimosa.staria.ui.theme.accent
 import com.lacrimosa.staria.ui.theme.stariaGlassEffects
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -417,9 +420,10 @@ private fun TabContent(
     selected: Boolean,
     highlight: Boolean,
 ) {
+    val accent = LocalThemeColor.current.accent()
     val color = when {
-        highlight -> Ink
-        selected -> Ink
+        highlight -> accent
+        selected -> accent
         else -> InkMuted
     }
 
@@ -453,14 +457,17 @@ private fun TabContent(
  * - 折射半径随按压进度增强：静息时很弱，按下时才明显
  *   （MeloX 用 `lens(r×s, r×s)`，s=0 时整段跳过，避免 NaN）
  */
+@Composable
 private fun Modifier.glassBarSurface(
     backdrop: Backdrop?,
     shape: androidx.compose.ui.graphics.Shape,
     pressProgress: () -> Float,
     exportedBackdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null,
 ): Modifier {
+    // 颜色令牌是 Composable 属性，组合期取出后供下方闭包捕获
+    val paperWhite = PaperWhite
     if (backdrop == null) {
-        return background(PaperWhite.copy(alpha = 0.94f), shape)
+        return background(paperWhite.copy(alpha = 0.94f), shape)
     }
     return this.drawBackdrop(
         backdrop = backdrop,
@@ -511,14 +518,17 @@ private fun Modifier.glassBarSurface(
  * `lens(0, 0)` 会让着色器里出现 0/0 ⇒ NaN ⇒ 内容变成黑洞。
  * 所以 pressProgress 小于阈值时**整段跳过**透镜调用，这是每帧都会命中的路径。
  */
+@Composable
 private fun Modifier.glassDroplet(
     backdrop: Backdrop?,
     shape: androidx.compose.ui.graphics.Shape,
     damped: StariaDampedDragAnimation,
 ): Modifier {
+    // 颜色令牌是 Composable 属性，组合期取出后供下方闭包捕获
+    val ink = Ink
     if (backdrop == null) {
         // 没有背景层（低版本 / 预览）：只保留灰底，至少能看出选中的是哪格
-        return this.background(Ink.copy(alpha = 0.10f), shape)
+        return this.background(ink.copy(alpha = 0.10f), shape)
     }
 
     return this.drawBackdrop(
@@ -561,7 +571,7 @@ private fun Modifier.glassDroplet(
             val p = damped.pressProgress.coerceIn(0f, 1f)
             val gray = 0.10f * (1f - p)
             if (gray > 0.001f) {
-                drawRect(Ink.copy(alpha = gray))
+                drawRect(ink.copy(alpha = gray))
             }
         },
     )
@@ -578,6 +588,8 @@ private fun DeleteButton(
     Box(
         modifier = modifier
             .size(CreateButtonSize)
+            // pressScale 在 background 之前：实心圆本体与图标一起扩大回弹
+            .pressScale()
             .background(Danger, CircleShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -603,24 +615,51 @@ private fun CreateButton(
     onExpandedChange: (Boolean) -> Unit,
     onCreate: (CreateKind) -> Unit,
 ) {
-    val progress by animateFloatAsState(
-        targetValue = if (expanded) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "create-progress",
+    val scope = rememberCoroutineScope()
+
+    // 每个动作钮独立的进度：展开时错峰飞出，收起时各自回落。
+    // Animatable 驱动，支持「弹簧带过冲」和逐按钮延迟。
+    val kinds = CreateKind.entries
+    val progresses = remember { kinds.map { Animatable(0f) } }
+
+    // 弹簧：带过冲（dampingRatio < 1），按钮到达位置时回弹
+    val overshootSpec = spring<Float>(
+        dampingRatio = 0.55f,
+        stiffness = Spring.StiffnessMediumLow,
     )
+
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            // 展开：下方按钮最先（order 越小越靠下、越先飞），时差 0.05s
+            kinds.forEachIndexed { index, _ ->
+                val order = kinds.size - 1 - index
+                launch {
+                    delay(order * 50L)
+                    progresses[index].animateTo(1f, overshootSpec)
+                }
+            }
+        } else {
+            // 收起：动作钮错峰回落（带过冲）。主按钮不做额外动画。
+            kinds.forEachIndexed { index, _ ->
+                val order = kinds.size - 1 - index
+                launch {
+                    delay(order * 50L)
+                    progresses[index].animateTo(0f, overshootSpec)
+                }
+            }
+        }
+    }
 
     val actionSize = 46.dp
     val gap = 12.dp
 
     Box(modifier = modifier, contentAlignment = Alignment.BottomEnd) {
-        val kinds = CreateKind.entries
         kinds.forEachIndexed { index, kind ->
             val order = kinds.size - 1 - index
             val distance = CreateButtonSize / 2 + actionSize / 2 + gap +
                 (actionSize + gap) * order
+
+            val progress = progresses[index].value
 
             Box(
                 modifier = Modifier
@@ -673,7 +712,7 @@ private fun CreateButton(
                     ),
                     modifier = Modifier
                         .size(22.dp)
-                        .graphicsLayer { rotationZ = 45f * progress },
+                        .graphicsLayer { rotationZ = 45f * (if (expanded) 1f else 0f) },
                     tint = Ink,
                 )
             }

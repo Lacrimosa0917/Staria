@@ -54,6 +54,6 @@ class NicknameStore(context: Context) {
     private companion object {
         const val PREFS_NAME = "staria_profile"
         const val KEY_NICKNAME = "nickname"
-        const val DEFAULT_NICKNAME = "沈星回"
+        const val DEFAULT_NICKNAME = "Staria"
     }
 }

@@ -1,37 +1,74 @@
 package com.lacrimosa.staria.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import com.lacrimosa.staria.data.DarkMode
+
+/** 深色模式三档，由根布局按设置项 + 系统亮度解析后下发。 */
+val LocalDarkMode = compositionLocalOf { DarkMode.FollowSystem }
 
 /**
- * 主题固定为浅色：设计要求全局白色背景，不跟随系统深色模式，
- * 也不启用动态取色（会破坏纯白基调）。
+ * 主题装配。
  *
- * 颜色全部定义在 [Color.kt]，这里只负责把它们交给 Material 的语义槽位。
+ * 浅色固定为白纸墨线；深色由 [LocalStariaColors] 的深色表驱动。
+ * Material 的语义槽位只做兜底，真正的颜色全部走 [Color.kt] 里的令牌。
  */
-private val StariaColorScheme = lightColorScheme(
-    primary = Ink,
-    onPrimary = PaperWhite,
-    background = PaperWhite,
-    onBackground = Ink,
-    surface = PaperWhite,
-    onSurface = Ink,
-    surfaceVariant = CardPaper,
-    onSurfaceVariant = InkMuted,
-    outline = Border,
-    error = Danger,
-)
-
 @Composable
 fun StariaTheme(
+    darkMode: DarkMode = DarkMode.FollowSystem,
     typography: Typography = StariaTypography,
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = StariaColorScheme,
-        typography = typography,
-        content = content,
-    )
+    // 实际是否深色：打开强制开、关闭强制关、跟随系统读系统亮度
+    val isDark = when (darkMode) {
+        DarkMode.On -> true
+        DarkMode.Off -> false
+        DarkMode.FollowSystem -> isSystemInDarkTheme()
+    }
+
+    val colors = if (isDark) DarkStariaColors else LightStariaColors
+    val colorScheme = if (isDark) {
+        darkColorScheme(
+            primary = colors.ink,
+            onPrimary = colors.pageBackground,
+            background = colors.pageBackground,
+            onBackground = colors.ink,
+            surface = colors.cardPaper,
+            onSurface = colors.ink,
+            surfaceVariant = colors.cardPaper,
+            onSurfaceVariant = colors.inkMuted,
+            outline = colors.border,
+            error = colors.danger,
+        )
+    } else {
+        lightColorScheme(
+            primary = colors.ink,
+            onPrimary = colors.paperWhite,
+            background = colors.pageBackground,
+            onBackground = colors.ink,
+            surface = colors.cardPaper,
+            onSurface = colors.ink,
+            surfaceVariant = colors.cardPaper,
+            onSurfaceVariant = colors.inkMuted,
+            outline = colors.border,
+            error = colors.danger,
+        )
+    }
+
+    CompositionLocalProvider(
+        LocalDarkMode provides darkMode,
+        LocalStariaColors provides colors,
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            content = content,
+        )
+    }
 }

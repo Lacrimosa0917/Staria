@@ -1,6 +1,7 @@
 package com.lacrimosa.staria.ui.think
 
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -36,12 +37,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.GlassCircleButton
 import com.lacrimosa.staria.ui.component.GlassPanel
+import com.lacrimosa.staria.ui.component.PageGlassLayer
 import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconMore
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
@@ -51,9 +54,9 @@ import com.lacrimosa.staria.ui.theme.Border
 import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.GlassSpec
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
-import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.PopupRadius
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
@@ -103,28 +106,26 @@ fun EssayReaderPage(
     // 展开后的面板尺寸：两项 + 上下内边距
     val menuHeight = MenuItemHeight * 2 + MenuPadV * 2
 
+    // 按钮 ↔ 菜单形变：用带过冲的弹簧，展开后有小幅回弹（对齐底栏/tooltip 手感）。
+    // 收起同样带弹性。三者共用同一套参数，形变才同步。
+    val morphSpec: SpringSpec<Dp> = spring(
+        dampingRatio = 0.55f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+
     val boxWidth by animateDpAsState(
         targetValue = if (menuExpanded) MenuWidth else ButtonSize,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = morphSpec,
         label = "more-width",
     )
     val boxHeight by animateDpAsState(
         targetValue = if (menuExpanded) menuHeight else ButtonSize,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = morphSpec,
         label = "more-height",
     )
     val corner by animateDpAsState(
         targetValue = if (menuExpanded) MenuRadius else CircleRadius,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
+        animationSpec = morphSpec,
         label = "more-corner",
     )
 
@@ -140,16 +141,21 @@ fun EssayReaderPage(
         label = "more-menu",
     )
 
-    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
-        // ---------- 正文（可滚动） ----------
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .statusBarsPadding()
-                // 顶栏按钮是悬浮的，正文顶部留出它的高度
-                .padding(top = ButtonSize + 28.dp),
-        ) {
+    // PageGlassLayer：本页自己录一份 backdrop，让顶栏圆钮透出的是本页正文，
+    // 而不是根布局那层（那只录了四个 tab 的内容）。
+    // content 会被录进 backdrop；chrome 里的玻璃控件不录制（否则画自己、栈溢出）。
+    PageGlassLayer(
+        modifier = modifier,
+        content = {
+            // ---------- 正文（可滚动） ----------
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .statusBarsPadding()
+                    // 顶栏按钮是悬浮的，正文顶部留出它的高度
+                    .padding(top = ButtonSize + 28.dp),
+            ) {
             // 标题行：随笔：＋标题
             Row(
                 modifier = Modifier
@@ -190,8 +196,9 @@ fun EssayReaderPage(
             )
 
             Spacer(Modifier.height(48.dp))
-        }
-
+            }
+        },
+        chrome = {
         // ---------- 菜单展开时点空白处收起 ----------
         // 放在按钮之前声明，层级低于按钮，所以不会挡住面板自身
         if (menuExpanded) {
@@ -239,6 +246,9 @@ fun EssayReaderPage(
                 shape = RoundedCornerShape(corner),
                 refractionScale = 0.6f,
                 edgeHighlight = if (!menuExpanded) 1.dp else 0.dp,
+                // 展开成菜单时用 tooltip 材质：更高模糊 + 薄蒙层，保证菜单项可读
+                blurDp = if (menuExpanded) GlassSpec.TOOLTIP_BLUR_DP else GlassSpec.BLUR_DP,
+                surfaceAlpha = if (menuExpanded) GlassSpec.TOOLTIP_SURFACE_ALPHA else 0f,
                 modifier = Modifier.size(boxWidth, boxHeight),
             ) {
             // 三点图标：收起态显示，展开时淡出
@@ -297,7 +307,8 @@ fun EssayReaderPage(
             }
             }
         }
-    }
+        },
+    )
 }
 
 /** 菜单里的一行。 */

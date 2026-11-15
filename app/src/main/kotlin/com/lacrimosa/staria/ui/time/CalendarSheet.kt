@@ -29,8 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.lacrimosa.staria.ui.icon.IconChevronLeft
 import com.lacrimosa.staria.ui.icon.IconChevronRight
 import java.time.LocalDate
@@ -40,52 +38,59 @@ import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.Border
+import com.lacrimosa.staria.ui.theme.accent
 
 private val WeekLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
 /**
  * 日历卡片：长按时间轴日期后唤起，选择日期跳转。
  * 左上角标题使用刻本宋体（README）。
+ *
+ * @param diaryDates 有日记的日期集合。有日记的日期以主题色圆形背景标记，
+ *   且只有这些日期可以点击；无日记的日期不可交互。
  */
 @Composable
 fun CalendarSheet(
     initialDate: LocalDate = LocalDate.now(),
+    diaryDates: Set<LocalDate> = emptySet(),
     onDismiss: () -> Unit,
     onPick: (LocalDate) -> Unit,
 ) {
     var month by remember { mutableStateOf(YearMonth.from(initialDate)) }
     val today = LocalDate.now()
+    // 最多翻到当前月份的下一个月
+    val maxMonth = YearMonth.from(today).plusMonths(1)
+    val canGoNext = month.isBefore(maxMonth)
+    // 主题色：有日记的日期圆形背景。简约白回落墨色。
+    val accent = LocalThemeColor.current.accent()
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Scrim)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss,
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Scrim)
+                .padding(horizontal = 32.dp)
+                .fillMaxWidth()
+                .background(PaperWhite, RoundedCornerShape(DialogRadius))
+                .border(1.dp, Border, RoundedCornerShape(DialogRadius))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss,
-                ),
-            contentAlignment = Alignment.Center,
+                ) {}
+                .padding(horizontal = 18.dp, vertical = 18.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 32.dp)
-                    .fillMaxWidth()
-                    .background(PaperWhite, RoundedCornerShape(DialogRadius))
-                    .border(1.dp, Border, RoundedCornerShape(DialogRadius))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {}
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
-            ) {
                 // ---- 标题：刻本宋体 ----
                 Text(
                     text = "选择日期",
@@ -117,7 +122,8 @@ fun CalendarSheet(
                     MonthArrow(
                         icon = IconChevronRight,
                         description = "下个月",
-                        onClick = { month = month.plusMonths(1) },
+                        enabled = canGoNext,
+                        onClick = { if (canGoNext) month = month.plusMonths(1) },
                     )
                 }
 
@@ -138,14 +144,12 @@ fun CalendarSheet(
 
                 Spacer(Modifier.height(6.dp))
 
-                // ---- 日期网格 ----
+                // ---- 日期网格：固定 6 行，窗口高度不再随行数变化 ----
                 val firstDay = month.atDay(1)
                 // 周一为一周起点
                 val leading = (firstDay.dayOfWeek.value - 1)
-                val total = leading + month.lengthOfMonth()
-                val rows = (total + 6) / 7
 
-                for (r in 0 until rows) {
+                for (r in 0 until 6) {
                     Row(modifier = Modifier.fillMaxWidth()) {
                         for (c in 0 until 7) {
                             val index = r * 7 + c
@@ -160,28 +164,40 @@ fun CalendarSheet(
                             ) {
                                 if (inMonth) {
                                     val date = month.atDay(dayOfMonth)
+                                    val hasDiary = date in diaryDates
                                     val isToday = date == today
                                     Box(
                                         modifier = Modifier
                                             .size(32.dp)
+                                            // 有日记：主题色圆形背景；今天：墨色描边
                                             .then(
-                                                if (isToday) {
+                                                if (hasDiary) {
+                                                    Modifier.background(accent, CircleShape)
+                                                } else {
+                                                    Modifier
+                                                },
+                                            )
+                                            .then(
+                                                if (isToday && !hasDiary) {
                                                     Modifier.border(1.dp, Ink, CircleShape)
                                                 } else {
                                                     Modifier
                                                 },
                                             )
+                                            // 只有写了日记的日期可交互
                                             .clickable(
                                                 interactionSource = remember { MutableInteractionSource() },
                                                 indication = null,
+                                                enabled = hasDiary,
                                                 onClick = { onPick(date) },
                                             ),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Text(
                                             text = dayOfMonth.toString(),
-                                            color = Ink,
+                                            color = if (hasDiary) PaperWhite else Ink,
                                             fontSize = 13.sp,
+                                            fontWeight = if (hasDiary) FontWeight.Medium else FontWeight.Normal,
                                         )
                                     }
                                 }
@@ -191,7 +207,6 @@ fun CalendarSheet(
                 }
             }
         }
-    }
 }
 
 @Composable
@@ -199,6 +214,7 @@ private fun MonthArrow(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     description: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     Box(
         modifier = Modifier
@@ -207,6 +223,7 @@ private fun MonthArrow(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onClick = onClick,
             ),
         contentAlignment = Alignment.Center,
@@ -215,7 +232,7 @@ private fun MonthArrow(
             imageVector = icon,
             contentDescription = description,
             modifier = Modifier.size(14.dp),
-            tint = Ink,
+            tint = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
         )
     }
 }
