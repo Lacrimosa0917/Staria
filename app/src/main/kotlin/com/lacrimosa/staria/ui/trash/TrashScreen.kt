@@ -63,6 +63,7 @@ import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
@@ -128,7 +129,7 @@ fun TrashScreen(
         selected.clear()
     }
 
-    Box(modifier = modifier.fillMaxSize().background(PaperWhite)) {
+    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
         // ---------- 内容 ----------
         if (items.isEmpty()) {
             Box(

@@ -24,7 +24,7 @@ import com.lacrimosa.staria.data.SampleData
 import com.lacrimosa.staria.ui.component.PaperCardStack
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.KebenSong
-import com.lacrimosa.staria.ui.theme.PaperWhite
+import com.lacrimosa.staria.ui.theme.PageBackground
 
 /**
  * 首页：极简留白布局。
@@ -44,7 +44,7 @@ fun HomeScreen(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(PaperWhite),
+            .background(PageBackground),
     ) {
         // 内容层铺满全屏，上下栏悬浮其上，不做额外留白
         val topGap = maxHeight * 0.12f

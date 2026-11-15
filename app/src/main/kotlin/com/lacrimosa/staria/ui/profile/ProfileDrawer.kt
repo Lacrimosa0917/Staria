@@ -45,6 +45,7 @@ import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PanelRadius
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -123,7 +124,7 @@ fun ProfileDrawer(
                             .coerceAtMost(0f)
                             .coerceAtLeast(-size.width)
                     }
-                    .background(PaperWhite),
+                    .background(PageBackground),
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Spacer(Modifier.height(28.dp))

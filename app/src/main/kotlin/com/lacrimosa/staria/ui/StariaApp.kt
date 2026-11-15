@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.lacrimosa.staria.ui.component.AvatarButton
 import com.lacrimosa.staria.ui.component.AvatarSize
 import com.lacrimosa.staria.ui.component.AvatarTopPadding
@@ -60,6 +62,8 @@ import com.lacrimosa.staria.ui.profile.NicknameDialog
 import com.lacrimosa.staria.ui.profile.ProfileDrawer
 import com.lacrimosa.staria.ui.selection.SelectionState
 import com.lacrimosa.staria.ui.settings.SettingsScreen
+import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.think.EssayReaderPage
 import com.lacrimosa.staria.ui.think.ThinkScreen
@@ -381,20 +385,38 @@ fun StariaApp() {
         bottom = BarHeight + BarBottomPadding + navBarBottom + ScrollEdgeGap,
     )
 
-    CompositionLocalProvider(LocalContentInsets provides contentInsets) {
-    Box(modifier = Modifier.fillMaxSize().background(PaperWhite)) {
+    // 液态玻璃的采样源：把「页面底色 + 全部页面内容」录进一个 GraphicsLayer。
+    // 玻璃控件（底栏、头像、新建栏、二级页顶栏、tooltip）通过 drawBackdrop
+    // 重新绘制这块内容并施加模糊/折射，从而「透出」它们下面真正的内容。
+    // 必须先画底色：不画的话，没有内容覆盖的区域在玻璃里会露出透明像素。
+    val glassBackdrop = rememberLayerBackdrop {
+        drawRect(PageBackground)
+        drawContent()
+    }
+
+    CompositionLocalProvider(
+        LocalContentInsets provides contentInsets,
+        LocalGlassBackdrop provides glassBackdrop,
+    ) {
+    Box(modifier = Modifier.fillMaxSize().background(PageBackground)) {
         // ---------- 内容层：铺满全屏 ----------
         // 上下栏改为悬浮，内容不再被它们挤占高度，
         // 各页面自行留出 ContentTopInset / ContentBottomInset 避开遮挡。
+        // layerBackdrop 把这一层录进 backdrop，供上面的玻璃控件采样。
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .layerBackdrop(glassBackdrop)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) {
-                    // 点空白处收起底栏展开口
-                    if (navExpanded || createExpanded) collapseBar()
+                    // 点空白处收起底栏展开口。
+                    // 首页不收起：首页是留白最多的页面，点空白只是为了放下一次
+                    // 卡片换位，不该顺手把底栏收掉（否则每次换卡都要重新展开）。
+                    if (currentTab != StariaTab.Home && (navExpanded || createExpanded)) {
+                        collapseBar()
+                    }
                 },
         ) {
             Crossfade(

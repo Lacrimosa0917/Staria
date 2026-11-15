@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -58,6 +59,7 @@ import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
+import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PaperWhite
 
 /**
@@ -240,12 +242,21 @@ private fun NavCapsule(
         label = "capsule-width",
     )
 
+    GlassPanel(
+        backdrop = LocalGlassBackdrop.current,
+        shape = shape,
+        // 胶囊圆角 = 高度/2（29dp），是半径最大的形状。库要求折射高度
+        // 不超过最小圆角半径，但贴近这个上限时两端会出现弧形断裂；
+        // 0.6 让实际折射高度落在 8.4dp，既有明确的厚边，又不破形。
+        refractionScale = 0.6f,
+        // 上下纯白高光：画面底色是 #F5F5F5，玻璃本身是透的，
+        // 这两道白边是「它是一条浮起来的玻璃」的主要视觉依据。
+        edgeHighlight = 1.dp,
+        modifier = modifier.width(width).height(CapsuleHeight),
+    ) {
     Row(
-        modifier = modifier
-            .width(width)
-            .height(CapsuleHeight)
-            .background(PaperWhite, shape)
-            .border(BorderStroke(1.dp, Border), shape)
+        modifier = Modifier
+            .fillMaxSize()
             .clip(shape)
             .padding(horizontal = CapsuleHPad),
         verticalAlignment = Alignment.CenterVertically,
@@ -257,8 +268,9 @@ private fun NavCapsule(
                     tab = tab,
                     selected = tab == current,
                     onClick = {
+                        // 切页后底栏保持展开（用户要求：切页不收起底栏）。
+                        // 只有操作页面内容时才由页面回调收起，见 StariaApp.collapseBar。
                         onSelect(tab)
-                        onExpandedChange(false)
                     },
                 )
             }
@@ -271,6 +283,7 @@ private fun NavCapsule(
                 onClick = { onExpandedChange(true) },
             )
         }
+    }
     }
 }
 
@@ -335,60 +348,66 @@ private fun CreateButton(
             val distance = CreateButtonSize / 2 + actionSize / 2 + gap +
                 (actionSize + gap) * order
 
+            // 位移与缩放做动画；alpha 只压图标内容。
+            // 若把 alpha 也压在整个玻璃面板上，玻璃层会被"洗"淡，
+            // 展开过程中看着就像一块没有材质感的白圆片。
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .graphicsLayer {
                         translationY = -distance.toPx() * progress
-                        alpha = progress
                         val s = 0.55f + 0.45f * progress
                         scaleX = s
                         scaleY = s
                     }
-                    .size(actionSize)
-                    .background(CardPaper, CircleShape)
-                    .border(BorderStroke(1.dp, Border), CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = expanded,
-                    ) {
+                    .size(actionSize),
+            ) {
+                InteractiveGlassPanel(
+                    backdrop = LocalGlassBackdrop.current,
+                    shape = CircleShape,
+                    pressInflate = 3.dp,
+                    // 圆形控件的边缘本身就是圆的，不需要上下白边
+                    enabled = expanded,
+                    onClick = {
                         onCreate(kind)
                         onExpandedChange(false)
                     },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = kind.icon,
-                    contentDescription = stringResource(kind.labelRes),
-                    modifier = Modifier.size(19.dp),
-                    tint = Ink,
-                )
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = kind.icon,
+                            contentDescription = stringResource(kind.labelRes),
+                            modifier = Modifier
+                                .size(19.dp)
+                                .graphicsLayer { alpha = progress },
+                            tint = Ink,
+                        )
+                    }
+                }
             }
         }
 
         // 主按钮：加号随展开旋转 45° 变成叉
-        Box(
-            modifier = Modifier
-                .size(CreateButtonSize)
-                .background(PaperWhite, CircleShape)
-                .border(BorderStroke(1.dp, Border), CircleShape)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                ) { onExpandedChange(!expanded) },
-            contentAlignment = Alignment.Center,
+        InteractiveGlassPanel(
+            backdrop = LocalGlassBackdrop.current,
+            shape = CircleShape,
+            pressInflate = 4.dp,
+            onClick = { onExpandedChange(!expanded) },
+            modifier = Modifier.size(CreateButtonSize),
         ) {
-            Icon(
-                imageVector = IconPlus,
-                contentDescription = stringResource(
-                    if (expanded) R.string.cd_collapse else R.string.cd_create,
-                ),
-                modifier = Modifier
-                    .size(22.dp)
-                    .graphicsLayer { rotationZ = 45f * progress },
-                tint = Ink,
-            )
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = IconPlus,
+                    contentDescription = stringResource(
+                        if (expanded) R.string.cd_collapse else R.string.cd_create,
+                    ),
+                    modifier = Modifier
+                        .size(22.dp)
+                        .graphicsLayer { rotationZ = 45f * progress },
+                    tint = Ink,
+                )
+            }
         }
     }
 }

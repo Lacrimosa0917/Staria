@@ -65,6 +65,7 @@ import com.lacrimosa.staria.ui.theme.HairLine
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
@@ -149,7 +150,7 @@ fun EditorScreen(
     // 这里注册的处理器晚于根布局，因此会优先拿到返回事件。
     androidx.activity.compose.BackHandler { requestExit() }
 
-    Box(modifier = modifier.fillMaxSize().background(PaperWhite)) {
+    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
         // ---------- 内容层 ----------
         Column(
             modifier = Modifier

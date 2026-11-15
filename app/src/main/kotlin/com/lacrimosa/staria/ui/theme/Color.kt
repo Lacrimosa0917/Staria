@@ -18,12 +18,25 @@ import androidx.compose.ui.graphics.Color
 
 // ---------- 面 ----------
 
-/** 全局纯白背景（README：全局背景采用白色）。 */
+/**
+ * 页面底色。
+ *
+ * 原先是纯白。接入液态玻璃后，玻璃面板本身是半透明白，压在纯白上
+ * 完全分辨不出来，所以底色退一档到 #F5F5F5，让白色玻璃与卡片浮起来。
+ * 这仍属于 README「全局背景采用白色」的范畴，只是多了一层灰阶。
+ */
+val PageBackground = Color(0xFFF5F5F5)
+
+/**
+ * 纯白：玻璃面板、弹窗、卡片、按钮的「纸面本色」。
+ *
+ * 不要再用它铺页面背景 —— 页面背景用 [PageBackground]。
+ */
 val PaperWhite = Color(0xFFFFFFFF)
 
 /**
- * 卡面：与图标母版底色一致（#FCFBF9），比纯白背景略暖一丝，
- * 让纸条卡片在白色背景上仍有边界感。
+ * 卡面：与图标母版底色一致（#FCFBF9），比页面底色略暖一丝，
+ * 让纸条卡片在背景上仍有边界感。
  */
 val CardPaper = Color(0xFFFCFBF9)
 

@@ -54,5 +54,10 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
 
+    // 液态玻璃材质（https://github.com/Kyant0/AndroidLiquidGlass）。
+    // 底层是 RenderEffect：blur 需 Android 12+，lens 折射需 Android 13+，
+    // 低版本由 ui/theme/Glass.kt 统一降级为「半透明纸面 + 描边」。
+    implementation("io.github.kyant0:backdrop:2.0.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

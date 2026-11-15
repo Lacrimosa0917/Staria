@@ -50,6 +50,7 @@ import com.lacrimosa.staria.ui.theme.CardPaper
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PanelRadius
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
@@ -89,7 +90,7 @@ fun SettingsScreen(
     var showDarkTooltip by remember { mutableStateOf(false) }
     var darkAnchor by remember { mutableStateOf(Offset.Zero) }
 
-    Box(modifier = modifier.fillMaxSize().background(PaperWhite)) {
+    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

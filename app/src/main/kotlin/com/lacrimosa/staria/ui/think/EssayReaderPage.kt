@@ -50,6 +50,7 @@ import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.PopupRadius
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
@@ -136,7 +137,7 @@ fun EssayReaderPage(
         label = "more-menu",
     )
 
-    Box(modifier = modifier.fillMaxSize().background(PaperWhite)) {
+    Box(modifier = modifier.fillMaxSize().background(PageBackground)) {
         // ---------- 正文（可滚动） ----------
         Column(
             modifier = Modifier
