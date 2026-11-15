@@ -49,6 +49,9 @@ import com.lacrimosa.staria.data.EditDraft
 import com.lacrimosa.staria.data.EditKind
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.GlassCircleButton
+import com.lacrimosa.staria.ui.component.GlassPill
+import com.lacrimosa.staria.ui.component.GlassPillIcon
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconClose
 import com.lacrimosa.staria.ui.icon.IconDiary
@@ -261,7 +264,7 @@ fun EditorScreen(
                 .statusBarsPadding()
                 .padding(start = BarSidePadding, top = 14.dp),
         ) {
-            CircleButton(
+            GlassCircleButton(
                 icon = IconClose,
                 description = "退出",
                 onClick = { requestExit() },
@@ -385,7 +388,7 @@ private fun BodyField(
     }
 }
 
-/** 撤回重做胶囊。 */
+/** 撤回重做胶囊（液态玻璃）。 */
 @Composable
 private fun HistoryCapsule(
     canUndo: Boolean,
@@ -393,54 +396,22 @@ private fun HistoryCapsule(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .height(CapsuleHeight)
-            .background(PaperWhite, RoundedCornerShape(CapsuleHeight / 2))
-            .border(1.dp, Border, RoundedCornerShape(CapsuleHeight / 2)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        CapsuleIcon(
+    GlassPill(height = CapsuleHeight) {
+        GlassPillIcon(
             icon = IconUndo,
             description = "撤回",
             enabled = canUndo,
             onClick = onUndo,
+            height = CapsuleHeight,
+            cellWidth = CapsuleCellWidth,
         )
-        CapsuleIcon(
+        GlassPillIcon(
             icon = IconRedo,
             description = "重做",
             enabled = canRedo,
             onClick = onRedo,
-        )
-    }
-}
-
-@Composable
-private fun CapsuleIcon(
-    icon: ImageVector,
-    description: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .width(CapsuleCellWidth)
-            .height(CapsuleHeight)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            modifier = Modifier.size(17.dp),
-            // 不可用时压淡，让「有没有东西可撤回」一眼可见
-            tint = if (enabled) Ink else InkMuted.copy(alpha = 0.35f),
+            height = CapsuleHeight,
+            cellWidth = CapsuleCellWidth,
         )
     }
 }
@@ -452,48 +423,22 @@ private fun CircleButton(
     description: String,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(ButtonSize)
-            .background(PaperWhite, CircleShape)
-            .border(1.dp, Border, CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            modifier = Modifier.size(17.dp),
-            tint = Ink,
-        )
-    }
+    GlassCircleButton(
+        icon = icon,
+        description = description,
+        onClick = onClick,
+    )
 }
 
 /** 保存按键：实心墨色，与其它空心圆钮区分主次。 */
 @Composable
 private fun SaveButton(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(ButtonSize)
-            .background(Ink, CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = IconSave,
-            contentDescription = "保存",
-            modifier = Modifier.size(17.dp),
-            tint = PaperWhite,
-        )
-    }
+    GlassCircleButton(
+        icon = IconSave,
+        description = "保存",
+        onClick = onClick,
+        filled = true,
+    )
 }
 
 /** 未保存时的询问弹窗。 */

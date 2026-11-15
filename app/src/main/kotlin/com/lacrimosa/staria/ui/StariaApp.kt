@@ -42,6 +42,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.AvatarButton
 import com.lacrimosa.staria.ui.component.AvatarSize
 import com.lacrimosa.staria.ui.component.AvatarTopPadding
@@ -54,6 +55,9 @@ import com.lacrimosa.staria.ui.component.LocalContentInsets
 import com.lacrimosa.staria.ui.component.ScrollEdgeGap
 import com.lacrimosa.staria.ui.component.StariaBottomBar
 import com.lacrimosa.staria.ui.component.StariaTab
+import com.lacrimosa.staria.ui.component.LocalTooltipHost
+import com.lacrimosa.staria.ui.component.TooltipHostState
+import com.lacrimosa.staria.ui.component.TooltipSurface
 import com.lacrimosa.staria.ui.editor.EditorScreen
 import com.lacrimosa.staria.ui.home.HomeScreen
 import com.lacrimosa.staria.ui.paper.ExpandedNoteOverlay
@@ -385,6 +389,9 @@ fun StariaApp() {
         bottom = BarHeight + BarBottomPadding + navBarBottom + ScrollEdgeGap,
     )
 
+    // 全局 tooltip 宿主：页面发起请求、根布局统一绘制（见 TooltipHostState）
+    val tooltipHost = remember { TooltipHostState() }
+
     // 液态玻璃的采样源：把「页面底色 + 全部页面内容」录进一个 GraphicsLayer。
     // 玻璃控件（底栏、头像、新建栏、二级页顶栏、tooltip）通过 drawBackdrop
     // 重新绘制这块内容并施加模糊/折射，从而「透出」它们下面真正的内容。
@@ -397,6 +404,7 @@ fun StariaApp() {
     CompositionLocalProvider(
         LocalContentInsets provides contentInsets,
         LocalGlassBackdrop provides glassBackdrop,
+        LocalTooltipHost provides tooltipHost,
     ) {
     Box(modifier = Modifier.fillMaxSize().background(PageBackground)) {
         // ---------- 内容层：铺满全屏 ----------
@@ -636,6 +644,20 @@ fun StariaApp() {
                 onSave = onSaveDraft,
             )
         }
+    }
+
+    // ---------- 全局 tooltip（液态玻璃） ----------
+    // 必须渲染在 layerBackdrop 子树**之外**：
+    // 玻璃面板要重画 backdrop 录到的内容，若它自己也在被录的子树里，
+    // 就成了「画自己」的递归 —— 实机会栈溢出崩溃。
+    // 页面只负责发起请求（见 TooltipHostState），这里统一绘制。
+    tooltipHost.current?.let { req ->
+        TooltipSurface(
+            actions = req.actions,
+            anchor = req.anchor,
+            onDismiss = { tooltipHost.dismiss() },
+            preferredCorner = req.preferredCorner,
+        )
     }
     }
 

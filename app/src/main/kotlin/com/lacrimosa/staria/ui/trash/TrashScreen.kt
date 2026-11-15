@@ -46,7 +46,10 @@ import com.lacrimosa.staria.data.TrashItem
 import com.lacrimosa.staria.data.TrashKind
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.GlassCircleButton
+import com.lacrimosa.staria.ui.component.GlassPanel
 import com.lacrimosa.staria.ui.component.TooltipAction
+import com.lacrimosa.staria.ui.component.clickableNoIndication
 import com.lacrimosa.staria.ui.icon.IconChecklist
 import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconTrash
@@ -63,6 +66,7 @@ import com.lacrimosa.staria.ui.theme.DialogRadius
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
@@ -415,28 +419,14 @@ private fun CircleButton(
     description: String,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(ButtonSize)
-            .background(PaperWhite, CircleShape)
-            .border(1.dp, Border, CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            modifier = Modifier.size(SelectionBoxSize),
-            tint = Ink,
-        )
-    }
+    GlassCircleButton(
+        icon = icon,
+        description = description,
+        onClick = onClick,
+    )
 }
 
-/** 胶囊按钮：左下角的批量恢复。 */
+/** 胶囊按钮：左下角的批量恢复（液态玻璃）。 */
 @Composable
 private fun PillButton(
     label: String,
@@ -444,36 +434,38 @@ private fun PillButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
+    GlassPanel(
+        backdrop = LocalGlassBackdrop.current,
+        shape = RoundedCornerShape(SecondaryButtonSize / 2),
+        refractionScale = 0.6f,
+        edgeHighlight = 1.dp,
         modifier = Modifier
-            .height(ButtonSize)
-            .background(PaperWhite, RoundedCornerShape(ButtonSize / 2))
-            .border(1.dp, Border, RoundedCornerShape(ButtonSize / 2))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            )
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .height(SecondaryButtonSize)
+            .clickableNoIndication(enabled = enabled, onClick = onClick),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(15.dp),
-            tint = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
-        )
-        Spacer(Modifier.width(7.dp))
-        Text(
-            text = label,
-            color = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
-            fontSize = 13.sp,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp),
+                tint = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
+            )
+            Spacer(Modifier.width(7.dp))
+            Text(
+                text = label,
+                color = if (enabled) Ink else InkMuted.copy(alpha = 0.4f),
+                fontSize = 13.sp,
+            )
+        }
     }
 }
 
-/** 圆形按钮：右下角的批量删除（红色，与纸条页的删除按钮呼应）。 */
+/** 圆形按钮：右下角的批量删除（红色实心，与纸条页的删除按钮呼应）。 */
 @Composable
 private fun CircleActionButton(
     icon: ImageVector,
@@ -483,17 +475,12 @@ private fun CircleActionButton(
 ) {
     Box(
         modifier = Modifier
-            .size(ButtonSize)
+            .size(SecondaryButtonSize)
             .background(
                 if (enabled) Danger else BorderDisabled,
                 CircleShape,
             )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            ),
+            .clickableNoIndication(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

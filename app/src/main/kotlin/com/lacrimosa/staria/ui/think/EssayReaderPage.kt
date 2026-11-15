@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.GlassCircleButton
 import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconMore
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
@@ -327,23 +328,10 @@ private fun CircleIconButton(
     description: String,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .size(ButtonSize)
-            .background(PaperWhite, CircleShape)
-            .border(1.dp, Border, CircleShape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = description,
-            modifier = Modifier.size(18.dp),
-            tint = Ink,
-        )
-    }
+    GlassCircleButton(
+        icon = icon,
+        description = description,
+        onClick = onClick,
+        iconSize = 18.dp,
+    )
 }

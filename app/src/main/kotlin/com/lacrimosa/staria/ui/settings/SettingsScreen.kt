@@ -40,6 +40,7 @@ import com.lacrimosa.staria.data.DarkMode
 import com.lacrimosa.staria.data.ThemeColor
 import com.lacrimosa.staria.ui.component.ActionTooltip
 import com.lacrimosa.staria.ui.component.BarSidePadding
+import com.lacrimosa.staria.ui.component.GlassCircleButton
 import com.lacrimosa.staria.ui.component.TooltipAction
 import com.lacrimosa.staria.ui.icon.IconCheck
 import com.lacrimosa.staria.ui.icon.IconBack
@@ -204,25 +205,11 @@ fun SettingsScreen(
                 .padding(start = BarSidePadding, top = SecondaryTopBarPad),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(ButtonSize)
-                    .background(PaperWhite, CircleShape)
-                    .border(1.dp, Border, CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onBack,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = IconBack,
-                    contentDescription = "返回",
-                    modifier = Modifier.size(17.dp),
-                    tint = Ink,
-                )
-            }
+            GlassCircleButton(
+                icon = IconBack,
+                description = "返回",
+                onClick = onBack,
+            )
             Spacer(Modifier.width(14.dp))
             Text(
                 text = "设置",
