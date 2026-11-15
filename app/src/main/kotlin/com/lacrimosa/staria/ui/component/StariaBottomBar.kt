@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceIn
@@ -79,6 +80,7 @@ import com.lacrimosa.staria.ui.theme.stariaGlassEffects
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** 底栏四个页面。 */
 enum class StariaTab(
@@ -622,9 +624,16 @@ private fun CreateButton(
     val kinds = CreateKind.entries
     val progresses = remember { kinds.map { Animatable(0f) } }
 
-    // 弹簧：带过冲（dampingRatio < 1），按钮到达位置时回弹
+    // 弹簧：带过冲（dampingRatio < 1），展开到达位置时回弹
     val overshootSpec = spring<Float>(
         dampingRatio = 0.55f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+
+    // 收起弹簧：临界阻尼（无过冲）。收起时若过冲，progress 会短暂变负，
+    // 玻璃层向下冲过主按钮、采样到下方空白，就是那个力度越大越大的色块。
+    val collapseSpec = spring<Float>(
+        dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMediumLow,
     )
 
@@ -639,12 +648,12 @@ private fun CreateButton(
                 }
             }
         } else {
-            // 收起：动作钮错峰回落（带过冲）。主按钮不做额外动画。
+            // 收起：动作钮错峰回落，无过冲（主按钮不做额外动画）
             kinds.forEachIndexed { index, _ ->
                 val order = kinds.size - 1 - index
                 launch {
                     delay(order * 50L)
-                    progresses[index].animateTo(0f, overshootSpec)
+                    progresses[index].animateTo(0f, collapseSpec)
                 }
             }
         }
@@ -660,39 +669,37 @@ private fun CreateButton(
                 (actionSize + gap) * order
 
             val progress = progresses[index].value
+            val distancePx = with(LocalDensity.current) { distance.toPx() }
 
-            Box(
+            InteractiveGlassPanel(
+                backdrop = LocalGlassBackdrop.current,
+                shape = CircleShape,
+                pressInflate = 3.dp,
+                enabled = expanded,
+                onClick = {
+                    onCreate(kind)
+                    onExpandedChange(false)
+                },
+                // 缩放放进玻璃层（layerBlock）：缩放以中心为原点，
+                // backdrop 采样随缩放一起，不会露出未采样区域。
+                layerScale = { 0.55f + 0.45f * progress },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .graphicsLayer {
-                        translationY = -distance.toPx() * progress
-                        val s = 0.55f + 0.45f * progress
-                        scaleX = s
-                        scaleY = s
-                    }
+                    // 平移用 layout offset（不是 layerBlock translation）：
+                    // layout 偏移会让 drawBackdrop 的采样坐标跟随玻璃一起移动，
+                    // 玻璃移到哪、采样就跟着采到哪，不会出现白色色块。
+                    .offset { IntOffset(0, (-distancePx * progress).roundToInt()) }
                     .size(actionSize),
             ) {
-                InteractiveGlassPanel(
-                    backdrop = LocalGlassBackdrop.current,
-                    shape = CircleShape,
-                    pressInflate = 3.dp,
-                    enabled = expanded,
-                    onClick = {
-                        onCreate(kind)
-                        onExpandedChange(false)
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = kind.icon,
-                            contentDescription = stringResource(kind.labelRes),
-                            modifier = Modifier
-                                .size(19.dp)
-                                .graphicsLayer { alpha = progress },
-                            tint = Ink,
-                        )
-                    }
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = kind.icon,
+                        contentDescription = stringResource(kind.labelRes),
+                        modifier = Modifier
+                            .size(19.dp)
+                            .graphicsLayer { alpha = progress },
+                        tint = Ink,
+                    )
                 }
             }
         }

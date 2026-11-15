@@ -71,6 +71,12 @@ fun InteractiveGlassPanel(
      * 若用外层 graphicsLayer.translationY 会把玻璃和背景错位、露出色块。
      */
     layerTranslationY: () -> Float = { 0f },
+    /**
+     * 玻璃层与内容的额外缩放倍率（乘在按压缩放之上）。
+     * 用于「展开/收起」类动画（如新建栏动作钮飞出）。
+     * 与 layerTranslationY 同理，必须放在 layerBlock，避免采样背景错位。
+     */
+    layerScale: () -> Float = { 1f },
     content: @Composable BoxScope.() -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -93,16 +99,19 @@ fun InteractiveGlassPanel(
                 // 内容用下方 graphicsLayer 同步，二者参数一致。
                 layerBlock = {
                     val p = progress.value
-                    if (p > 0f) {
+                    val base = if (p > 0f) {
                         val maxScale = if (size.width > 0f) {
                             (size.width + inflatePx * 2) / size.width
                         } else {
                             1f
                         }
-                        val s = 1f + (maxScale - 1f) * p
-                        scaleX = s
-                        scaleY = s
+                        1f + (maxScale - 1f) * p
+                    } else {
+                        1f
                     }
+                    val s = base * layerScale()
+                    scaleX = s
+                    scaleY = s
                     translationY = layerTranslationY()
                 },
             )
@@ -133,22 +142,29 @@ fun InteractiveGlassPanel(
     ) {
         // 内容跟随玻璃层同步缩放 + 平移：倍率与位移和 layerBlock 完全一致。
         // 用 graphicsLayer 包住 content，图标/文字随面板一起扩大回弹、一起平移。
+        // 内容层只做「按压缩放 × layerScale」，不做平移 ——
+        // 玻璃层（layerBlock）已经把整个面板平移到位，
+        // 这里若再叠加 layerTranslationY 会双重平移，
+        // 把图标推到面板可见范围之外（图标消失），
+        // 同时让面板采样内容与可见内容错位（白色残影色块）。
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .graphicsLayer {
                     val p = progress.value
-                    if (p > 0f) {
+                    val base = if (p > 0f) {
                         val maxScale = if (size.width > 0f) {
                             (size.width + inflatePx * 2) / size.width
                         } else {
                             1f
                         }
-                        val s = 1f + (maxScale - 1f) * p
-                        scaleX = s
-                        scaleY = s
+                        1f + (maxScale - 1f) * p
+                    } else {
+                        1f
                     }
-                    translationY = layerTranslationY()
+                    val s = base * layerScale()
+                    scaleX = s
+                    scaleY = s
                 },
         ) {
             content()
@@ -166,6 +182,7 @@ fun InteractiveGlassPanel(
     enabled: Boolean = true,
     onClick: () -> Unit,
     layerTranslationY: () -> Float = { 0f },
+    layerScale: () -> Float = { 1f },
     content: @Composable BoxScope.() -> Unit,
 ) = InteractiveGlassPanel(
     backdrop = LocalGlassBackdrop.current,
@@ -176,5 +193,6 @@ fun InteractiveGlassPanel(
     enabled = enabled,
     onClick = onClick,
     layerTranslationY = layerTranslationY,
+    layerScale = layerScale,
     content = content,
 )
