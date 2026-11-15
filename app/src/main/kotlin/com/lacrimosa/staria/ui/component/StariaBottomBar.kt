@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -253,7 +254,11 @@ private fun NavCapsule(
         edgeHighlight = 1.dp,
         modifier = modifier
             .width(width)
-            .height(CapsuleHeight),
+            .height(CapsuleHeight)
+            // 动画期间每一帧尺寸都在变。玻璃面板会用新尺寸重画 backdrop，
+            // 若不加裁剪，上一帧的采样内容会在边缘留下一圈半透明拖影。
+            // clipToBounds 把绘制严格限制在当前轮廓内，拖影随之消失。
+            .clipToBounds(),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
 

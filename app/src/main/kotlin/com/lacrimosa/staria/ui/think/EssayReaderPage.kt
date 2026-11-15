@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.Essay
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.GlassCircleButton
+import com.lacrimosa.staria.ui.component.GlassPanel
 import com.lacrimosa.staria.ui.icon.IconBack
 import com.lacrimosa.staria.ui.icon.IconMore
 import com.lacrimosa.staria.ui.icon.IconPencilSmall
@@ -51,6 +52,7 @@ import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
+import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.PopupRadius
@@ -219,15 +221,26 @@ fun EssayReaderPage(
         }
 
         // ---------- 右上角：更多（点击后自身形变为菜单） ----------
+        // 形状动画期间圆角在「正圆」与「12dp 圆角」之间变化，两者都是
+        // CornerBasedShape，玻璃折射能跟上；宽度跨度过大时折射带会被拉宽，
+        // 因此倍率收到 0.6，与底栏胶囊一致。
+        //
+        // 注意 padding 必须在 GlassPanel 之前：
+        // GlassPanel 用 drawBackdrop 绘制，若把 padding 写在它之后，
+        // 面板会被整体内缩，而点击感应区仍留在原位，出现「看得见点不到」。
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(end = BarSidePadding, top = 14.dp)
-                .size(boxWidth, boxHeight)
-                .background(PaperWhite, RoundedCornerShape(corner))
-                .border(1.dp, Border, RoundedCornerShape(corner)),
+                .padding(end = BarSidePadding, top = 14.dp),
         ) {
+            GlassPanel(
+                backdrop = LocalGlassBackdrop.current,
+                shape = RoundedCornerShape(corner),
+                refractionScale = 0.6f,
+                edgeHighlight = if (!menuExpanded) 1.dp else 0.dp,
+                modifier = Modifier.size(boxWidth, boxHeight),
+            ) {
             // 三点图标：收起态显示，展开时淡出
             Box(
                 modifier = Modifier.fillMaxSize().alpha(iconAlpha),
@@ -281,6 +294,7 @@ fun EssayReaderPage(
                         },
                     )
                 }
+            }
             }
         }
     }

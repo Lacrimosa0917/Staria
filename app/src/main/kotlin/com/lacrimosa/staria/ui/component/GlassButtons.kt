@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -94,10 +95,15 @@ fun GlassPill(
         // 圆角 = 高度/2，比圆钮的半径大，按底栏同样的比例收一下
         refractionScale = 0.6f,
         edgeHighlight = 1.dp,
+        // 关键：只固定高度，宽度由内容撑开（wrapContent）。
+        // 早先这里没给宽度约束，Panel 内部的 fillMaxSize 会让它占满整行，
+        // 结果撤销重做胶囊把编辑页整个顶栏都吃掉了。
         modifier = modifier.height(height),
     ) {
         androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .height(height)
+                .wrapContentWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
             content = content,
