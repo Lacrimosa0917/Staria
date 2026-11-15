@@ -313,9 +313,12 @@ private fun NavBar(
             .height(BarHeightDp),
     ) {
         // ══ L1：面板玻璃 ══
-        // 面板本身**不缩放**：它是底栏的「容器」，放大它会连同
-        // 下面透出的正文一起拉伸（正文属于页面，不该跟着动）。
-        // 按压缩放只给上面的图标与文字，见后面的 tab 行。
+        // 面板随按压一起变大，但**采样到的页面正文不会跟着变形**。
+        //
+        // 这个「只缩自己不缩背景」的效果正是库 `layerBlock` 的设计意图：
+        // 它变换的是玻璃这一层，而 backdrop 采样仍在原始坐标系里进行。
+        // 如果改用外层 graphicsLayer 缩放，整个子树（含采样结果）会被一起
+        // 拉伸——正文就跟着变了，那正是上一版的问题。
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -363,11 +366,15 @@ private fun NavBar(
         // 那样它的命中坐标是各自格子的局部坐标，而手势层用的是整行坐标，
         // 两套坐标混在一起会让「点哪个都跳不对」。
         //
-        // ★ 按压缩放**只作用在这一行**：
-        // 需求是「底栏扩大时只扩大按键的图标与文字，不影响最下层的正文」。
-        // 所以缩放不能放在最外层（那会把玻璃与背景一起拉伸），
-        // 而是放在内容行自己的 graphicsLayer 上 —— 图标与文字跟着放大，
-        // 面板玻璃、滑块、以及面板透出的页面正文都维持原尺寸。
+        // ★ 按压缩放：图标与文字跟随面板一起放大。
+        //
+        // 倍率与面板的 layerBlock 完全一致（见 glassBarSurface），
+        // 两边都按「向外扩张固定 10dp」算，所以内容与玻璃边缘同步位移，
+        // 不会出现「玻璃变大了、图标还在原位」的错位。
+        //
+        // 区别在于：面板用的是 drawBackdrop 的 layerBlock（只缩玻璃层），
+        // 内容用的是这里普通 graphicsLayer（缩的是内容本身）。
+        // 用的坐标系不同，但视觉倍率相同。
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -375,10 +382,10 @@ private fun NavBar(
                 .graphicsLayer {
                     val p = damped.pressProgress.coerceIn(0f, 1f)
                     if (p > 0f) {
-                        // 放大 6%：足够被察觉，又不至于让文字挤到相邻格
-                        val s = 1f + 0.06f * p
-                        scaleX = s
-                        scaleY = s
+                        val maxExtra = 10.dp.toPx() * 2f
+                        val w = size.width.coerceAtLeast(1f)
+                        scaleX = 1f + (maxExtra / w) * p
+                        scaleY = 1f + 0.03f * p
                     }
                 }
                 .then(damped.modifier),
@@ -470,14 +477,16 @@ private fun Modifier.glassBarSurface(
         // exportedBackdrop 会跳过内容绘制，只录外壳。
         exportedBackdrop = exportedBackdrop,
         layerBlock = {
-            // ⚠ 这里**不做**缩放：整条底栏（含图标文字）的按压缩放
-            // 由外层 Box 的 graphicsLayer 统一负责，这样内容才会一起放大。
-            // 早期把 scale 写在这里，只变换玻璃层，图标文字不动 —— 与需求相反。
+            // 面板随按压放大：**只变换玻璃这一层**。
+            // backdrop 的采样不受这里影响，所以面板变大时，
+            // 透过它看到的页面正文仍是原尺寸、原位置 —— 这正是
+            // `layerBlock` 与「外层 graphicsLayer」的本质区别。
             val p = pressProgress().coerceIn(0f, 1f)
             if (p > 0f) {
-                // 只保留一点点纵向拉伸作为「被压扁」的触感，
-                // 幅度极小，肉眼几乎不察，不会与内容缩放打架。
-                scaleY = 1f
+                val maxExtra = 10.dp.toPx() * 2f
+                val w = size.width.coerceAtLeast(1f)
+                scaleX = 1f + (maxExtra / w) * p
+                scaleY = 1f + 0.03f * p
             }
         },
     )
