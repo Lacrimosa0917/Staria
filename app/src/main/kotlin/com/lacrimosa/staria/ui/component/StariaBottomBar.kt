@@ -310,22 +310,12 @@ private fun NavBar(
     Box(
         modifier = modifier
             .width(barWidth)
-            .height(BarHeightDp)
-            // 整条底栏（玻璃 + 图标 + 文字）随按压一起放大。
-            // MeloX 的 L1 膨胀就是整体 scale —— 早期我把它写在面板的
-            // layerBlock 里，只缩玻璃不缩内容，与需求不符。
-            .graphicsLayer {
-                val p = damped.pressProgress.coerceIn(0f, 1f)
-                if (p > 0f) {
-                    val maxExtra = 10.dp.toPx() * 2f
-                    val w = size.width.coerceAtLeast(1f)
-                    val s = 1f + (maxExtra / w) * p
-                    scaleX = s
-                    scaleY = 1f + 0.03f * p
-                }
-            },
+            .height(BarHeightDp),
     ) {
         // ══ L1：面板玻璃 ══
+        // 面板本身**不缩放**：它是底栏的「容器」，放大它会连同
+        // 下面透出的正文一起拉伸（正文属于页面，不该跟着动）。
+        // 按压缩放只给上面的图标与文字，见后面的 tab 行。
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -372,10 +362,25 @@ private fun NavBar(
         // ⚠ 每个 tab 自己**不能**再挂 clickable：
         // 那样它的命中坐标是各自格子的局部坐标，而手势层用的是整行坐标，
         // 两套坐标混在一起会让「点哪个都跳不对」。
+        //
+        // ★ 按压缩放**只作用在这一行**：
+        // 需求是「底栏扩大时只扩大按键的图标与文字，不影响最下层的正文」。
+        // 所以缩放不能放在最外层（那会把玻璃与背景一起拉伸），
+        // 而是放在内容行自己的 graphicsLayer 上 —— 图标与文字跟着放大，
+        // 面板玻璃、滑块、以及面板透出的页面正文都维持原尺寸。
         Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = rowPad)
+                .graphicsLayer {
+                    val p = damped.pressProgress.coerceIn(0f, 1f)
+                    if (p > 0f) {
+                        // 放大 6%：足够被察觉，又不至于让文字挤到相邻格
+                        val s = 1f + 0.06f * p
+                        scaleX = s
+                        scaleY = s
+                    }
+                }
                 .then(damped.modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
