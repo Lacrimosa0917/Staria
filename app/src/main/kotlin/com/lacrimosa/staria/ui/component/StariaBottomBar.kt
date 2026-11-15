@@ -73,6 +73,7 @@ import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PaperWhite
+import com.lacrimosa.staria.ui.theme.stariaGlassEffects
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -200,36 +201,45 @@ private fun NavBar(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
 
-    // 每格宽度：等分
-    val tabWidth = (barWidth - BarSidePadding * 2) / tabCount
+    // ---- 几何：让滑块在最左/最右时，四边留白完全相等 ----
+    //
+    // 目标是「滑块停在第一格时，它的左边缘距胶囊左缘 == 上边缘距胶囊上缘」。
+    // 上部留白由 DropletInset 决定（滑块比面板矮 2×DropletInset），
+    // 所以左右也要等于这个值。推导：
+    //
+    //   设格子宽 w、滑块宽 d = 1.15w + 2dp、内缘 inner = DropletInset，
+    //   第 0 格中心到左缘 = inner + d/2，
+    //   相邻格中心距 = (barW - 2·inner - d) / (n - 1)  ← 首末格中心正好被内缘夹住
+    //   联立 d = 1.15w + 2 解得：
+    //     w = (barW - 2·inner - 2) / (4.15)
+    //
+    //   （4.15 = n - 1 + 1.15，n = 4 时成立）
+    //
+    // 这样格子本身会比原来宽一点 —— 也就是「略微增加四个按键之间的间距」，
+    // 视觉上四个按键更疏朗，滑块贴边也贴得准。
+    val innerEdge = DropletInset
+    val tabCountF = tabCount.toFloat()
+    val tabWidth = ((barWidth - innerEdge * 2 - 2.dp) / (tabCountF - 1f + 1.15f))
     val tabWidthPx = with(density) { tabWidth.toPx() }
 
-    // 滑块宽度 = 1.15 格 + 2dp（覆盖图标与文字，但不到两格）
-    val dropletWidth = (tabWidth * 1.15f + 2.dp)
-        .coerceAtMost(barWidth - BarSidePadding * 2)
+    val dropletWidth = tabWidth * 1.15f + 2.dp
     val dropletHeight = BarHeightDp - DropletInset * 2
     val dropletWidthPx = with(density) { dropletWidth.toPx() }
 
-    // 滑块可移动的左右边界。
-    //
-    // 直接用 `0 .. barWidth - dropletWidth` 会让最左/最右格与胶囊边缘差半个格子的空隙：
-    // 第 0 格的目标中心是 `pad + tabWidth/2`，比 `dropletWidth/2` 更靠右，
-    // 于是滑块停在离边 `pad + (tabWidth - dropletWidth)/2` 的位置 —— 视觉上「离边太远」。
-    //
-    // 这里改成按格中心算出的真实可行区间：
-    // 左界 = 第 0 格中心 - 半宽，右界 = 最后一格中心 - 半宽。
-    // 两者都夹进面板内部，最左/最右格因此贴边更近。
-    val firstCenterPx = with(density) { (BarSidePadding + tabWidth / 2).toPx() }
-    val lastCenterPx = with(density) { (BarSidePadding + tabWidth * (tabCount - 0.5f)).toPx() }
-    val minOffsetPx = (firstCenterPx - dropletWidthPx / 2f).coerceAtLeast(0f)
-    val maxOffsetPx = (lastCenterPx - dropletWidthPx / 2f)
-        .coerceAtMost(with(density) { barWidth.toPx() } - dropletWidthPx)
+    // 第 0 格中心（相对胶囊左缘）= 内缘 + 半个滑块
+    val firstCenterPx = with(density) { (innerEdge + dropletWidth / 2).toPx() }
+    // 相邻格中心距
+    val centerStepPx = with(density) {
+        (barWidth - innerEdge * 2 - dropletWidth).toPx() / (tabCountF - 1f)
+    }
+
+    // tab 行的左右内缩：让第 i 格中心恰好落在 firstCenter + i×step 上
+    val rowPad = innerEdge + dropletWidth / 2 - tabWidth / 2
 
     // ---- 阻尼拖拽动画 ----
     val currentSelectedIndex by rememberUpdatedState(selectedIndex)
     val currentTabs by rememberUpdatedState(tabs)
     val currentTabWidthPx by rememberUpdatedState(tabWidthPx)
-    val currentDropletWidthPx by rememberUpdatedState(dropletWidthPx)
     val currentOnSelect by rememberUpdatedState(onSelect)
 
     val damped = remember(tabCount) {
@@ -241,14 +251,14 @@ private fun NavBar(
             // 按下时放大到 1.39×（78/56，MeloX 原值）
             pressedScale = 78f / 56f,
             onTap = { position ->
-                // position 是**整行内容坐标**（手势挂在 tab 行上，行已内缩 BarSidePadding），
-                // 所以直接除以格宽就是格下标。
+                // position 是**整行内容坐标**（行已内缩 rowPad）。
                 //
-                // 早先按「滑块局部坐标」算（value + (x - 半宽)/格宽）是错的：
-                // 那个公式适用于手势挂在滑块上的情形，搬到整行后每次点击都会
-                // 偏移半个滑块，表现为「点哪个都跳不对」。
+                // ⚠ 必须用「向下取整」而不是四舍五入：
+                // 第 i 格覆盖 [i·w, (i+1)·w)，中心在 (i+0.5)·w。
+                // 若用 round(x/w)，点在第 i 格中心会得到 round(i+0.5) = i+1
+                // —— 也就是「点当前项反而跳到下一格」，正是这条 bug 的成因。
                 val index = (position.x / currentTabWidthPx.coerceAtLeast(1f))
-                    .fastRoundToInt()
+                    .toInt()
                     .fastCoerceIn(0, tabCount - 1)
                 currentOnSelect(currentTabs[index])
             },
@@ -307,16 +317,19 @@ private fun NavBar(
                 ),
         )
 
-        // ══ L3：滑块（水珠）══
-        // 注意绘制顺序：滑块在面板之后、tab 内容之前。
-        // 滑块是「垫在选中项下面的一块玻璃」，不是盖在图标上的蒙层，
-        // 所以图标与文字永远是最上层、最清晰的那一份。
+        // ══ L3：滑块 ══
+        // 绘制顺序：面板 → 滑块 → tab 文字。
+        // 滑块垫在文字下面，所以文字永远是最上层、最清晰的那一份。
+        //
+        // 两态（对齐 MeloX 的 L3 水珠）：
+        // - **静息**：灰底色块，无模糊/折射 —— 它只是「当前在这格」的标记
+        // - **按压缩放**：变成全透明带折射的玻璃，能看见下方面板内容被弯折
+        //   切换由 `glassDroplet` 内部按 pressProgress 连续插值，不是硬切
         Box(
             modifier = Modifier
                 .offset {
-                    val centerX = firstCenterPx + tabWidthPx * damped.value
-                    val x = (centerX - dropletWidthPx / 2f)
-                        .fastCoerceIn(minOffsetPx, maxOffsetPx)
+                    val centerX = firstCenterPx + centerStepPx * damped.value
+                    val x = (centerX - dropletWidthPx / 2f).coerceAtLeast(0f)
                     androidx.compose.ui.unit.IntOffset(x.fastRoundToInt(), 0)
                 }
                 .align(Alignment.CenterStart)
@@ -336,11 +349,16 @@ private fun NavBar(
         //
         // ⚠ 每个 tab 自己**不能**再挂 clickable：
         // 那样它的命中坐标是各自格子的局部坐标，而手势层用的是整行坐标，
-        // 两套坐标混在一起会让「点哪个都跳不对」（实测报障的正是这个）。
+        // 两套坐标混在一起会让「点哪个都跳不对」。
+        //
+        // ⚠ 行本身**不能**跟着面板一起缩放：
+        // 面板按下时膨胀，若这一行也在同一个缩放层里，图标和文字会一起变大。
+        // 面板的 scale 写在它自己的 layerBlock 里（只变换玻璃那一层），
+        // 所以这一行天然不受影响 —— 这里只做位置对齐。
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = BarSidePadding)
+                .padding(horizontal = rowPad)
                 .then(damped.modifier),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -417,72 +435,106 @@ private fun Modifier.glassBarSurface(
     return this.drawBackdrop(
         backdrop = backdrop,
         shape = { shape },
-        effects = {
-            vibrancy()
-            // 模糊度按用户口径：保持 2dp，不为可读性妥协 ——
-            // 玻璃要透、要能看见下面内容的流动感，压住正文不是这里的目标。
-            blur(2.dp.toPx())
-            val p = pressProgress().coerceIn(0f, 1f)
-            // 静息也保留一点折射（面板本身要有厚边），按下时增强
-            val s = 0.45f + 0.55f * p
-            lens(24.dp.toPx() * s, 24.dp.toPx() * s, depthEffect = false)
-        },
+        // 效果栈与其余玻璃控件（新建按钮、头像、二级页圆钮）**完全同源**：
+        // 都走 stariaGlassEffects，参数只在 GlassSpec 里定义一次。
+        // 之前底栏自己写了一套 blur(2dp) + lens(24dp)，与右侧新建按钮
+        // 的 6dp/14dp 不一致，并排看就是两种材质。
+        effects = { stariaGlassEffects() },
         layerBlock = {
             // 按下时整条面板膨胀：向外扩散固定的 14dp（不是按比例），
             // 与 MeloX 的 `1 + 16dp/width × p` 同思路 —— 这样面板「被按了一下」
             // 的视觉强度与宽度无关，宽屏窄屏手感一致。
             //
-            // 必须写在 layerBlock 而不是外层 graphicsLayer：
-            // layerBlock 只变换玻璃这一层，backdrop 采样仍是原始尺寸，
-            // 否则膨胀时背景会跟着一起放大（看起来像画面在抖）。
+            // 必须写在 layerBlock：它只变换玻璃这一层，backdrop 采样仍是原始尺寸，
+            // 否则膨胀时背景会跟着放大（看起来像画面在抖）。
+            // 内部的 tab 行不在这个变换里，所以图标与文字不会跟着变大。
             val p = pressProgress().coerceIn(0f, 1f)
             if (p > 0f) {
                 val maxExtra = 14.dp.toPx() * 2f
                 val w = size.width.coerceAtLeast(1f)
-                val s = 1f + (maxExtra / w) * p
-                scaleX = s
-                scaleY = 1f + (0.035f * p)
+                scaleX = 1f + (maxExtra / w) * p
+                scaleY = 1f + 0.035f * p
             }
         },
-        onDrawSurface = {
-            // 面板蒙层也按用户口径压薄：玻璃要透，
-            // 下面滚动的内容与面板文字叠一点是可以接受的。
-            drawRect(PaperWhite.copy(alpha = 0.55f))
-        },
+        // 不额外叠蒙层：与 GlassPanel 一致（它现在也不画 surface，
+        // 玻璃的可见性由 blur + lens + 细描边共同给出）。
     )
 }
 
 /**
- * 滑块（L3）。
+ * 滑块（L3），两态连续过渡。
  *
- * 按用户口径，滑块**不做玻璃**：它是一个半透明灰底色块，
- * 不带模糊、折射、高光、阴影。理由很实际 ——
- * 玻璃滑块在浅灰页面上几乎看不见（它的采样源和面板太接近），
- * 而滑块的职责就是「标出当前在哪一格」，可见性优先。
+ * ## 为什么是两套材质叠在一起
  *
- * 只保留两项动态：
- * - 按压缩放（`layerBlock`，与 MeloX 同一套 scaleX/scaleY 分离弹簧）
- * - 甩动时的横向拉长
+ * 需求是「静息灰底、按下玻璃」。如果做成 `if (pressed) 玻璃 else 灰底`，
+ * 切换瞬间会硬切（灰块一闪变成玻璃），违反「所有元素平滑过渡」。
+ * 所以这里**同时画两套**，用 [StariaDampedDragAnimation.pressProgress] 做交叉淡化：
  *
- * 缩放仍写在 `layerBlock` 里，原因见 `InteractiveGlassPanel`：
- * 写在外层 `graphicsLayer` 会连背景采样一起变换，位置会错。
+ * - 灰底层：alpha 从 0.10 降到 0（按下时淡出）
+ * - 玻璃层：透明底 + 折射，折射强度从 0 升到满（按下时淡入）
+ *
+ * 两者在同一个 Box 上，不需要额外容器的 alpha（那会把折射一起洗淡）。
+ *
+ * ## 折射必须从 0 起算
+ *
+ * `lens(0, 0)` 会让着色器里出现 0/0 ⇒ NaN ⇒ 内容变成黑洞。
+ * 所以 pressProgress 小于阈值时**整段跳过**透镜调用，这是每帧都会命中的路径。
  */
 private fun Modifier.glassDroplet(
     backdrop: Backdrop?,
     shape: androidx.compose.ui.graphics.Shape,
     damped: StariaDampedDragAnimation,
-): Modifier = this
-    .graphicsLayer {
-        // 速度修正：甩动时横向拉长、纵向压扁，像被甩出去的一块色块
-        val v = damped.velocity.let { if (it.isFinite()) it else 0f } / 10f
-        val widenDenom = 1f - (v * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-        val widenFactor = 1f - (v * 0.25f).fastCoerceIn(-0.2f, 0.2f)
-        val sx = damped.scaleX.let { if (it.isFinite()) it else 1f }
-        val sy = damped.scaleY.let { if (it.isFinite()) it else 1f }
-        scaleX = (sx / widenDenom).let { if (it.isFinite()) it else 1f }
-        scaleY = (sy * widenFactor).let { if (it.isFinite()) it else 1f }
+): Modifier {
+    if (backdrop == null) {
+        // 没有背景层（低版本 / 预览）：只保留灰底，至少能看出选中的是哪格
+        return this.background(Ink.copy(alpha = 0.10f), shape)
     }
-    .background(Ink.copy(alpha = 0.10f), shape)
+
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            val p = damped.pressProgress.coerceIn(0f, 1f)
+            // 只在按下时才有折射；静息完全不碰透镜（lens(0,0) 会算出 NaN）
+            if (p > 0.02f) {
+                lens(
+                    refractionHeight = 12.dp.toPx() * p,
+                    refractionAmount = 16.dp.toPx() * p,
+                    depthEffect = true,
+                    // 关掉色散：浅色玻璃上会析出明显彩虹边，
+                    // 与「白纸 + 墨线」的克制基调冲突
+                    chromaticAberration = false,
+                )
+            }
+        },
+        layerBlock = {
+            // 按压缩放 + 甩动变形。写在 layerBlock 里才是「只变换这一层」
+            val v = damped.velocity.let { if (it.isFinite()) it else 0f } / 10f
+            val widenDenom = 1f - (v * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+            val widenFactor = 1f - (v * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+            val sx = damped.scaleX.let { if (it.isFinite()) it else 1f }
+            val sy = damped.scaleY.let { if (it.isFinite()) it else 1f }
+            scaleX = (sx / widenDenom).let { if (it.isFinite()) it else 1f }
+            scaleY = (sy * widenFactor).let { if (it.isFinite()) it else 1f }
+        },
+        onDrawSurface = {
+            // ⚠ 这里**只画灰底**，且按下时淡出到 0。
+            //
+            // 早先的写法有两处叠加导致「按下后滑块内部发白」：
+            // ① 灰底写在 modifier 上（`background`），它永远不消失；
+            // ② 这里又画了一层白（`0.72f * (1-p)`）。
+            // 两层白色叠在玻璃之上，折射自然看不见。
+            //
+            // 现在只有这一处负责可见性：静息 0.10 灰、按下渐隐到 0，
+            // 于是按下时滑块只剩折射 —— 即「全透明的玻璃」。
+            val p = damped.pressProgress.coerceIn(0f, 1f)
+            val gray = 0.10f * (1f - p)
+            if (gray > 0.001f) {
+                drawRect(Ink.copy(alpha = gray))
+            }
+        },
+    )
+}
 
 /**
  * 多选模式下的红色删除按钮。尺寸与新建按钮一致，切换时位置不跳动。
