@@ -1,15 +1,10 @@
 package com.lacrimosa.staria.ui.component
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +12,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,23 +24,36 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.util.fastCoerceIn
+import androidx.compose.ui.util.fastRoundToInt
+import androidx.compose.ui.util.lerp
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
 import com.lacrimosa.staria.R
 import com.lacrimosa.staria.ui.icon.IconDiary
 import com.lacrimosa.staria.ui.icon.IconEssay
@@ -66,15 +73,10 @@ import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PaperWhite
-import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-/**
- * 底栏四个页面。
- *
- * [icon] 是未选中时的线性图标，[selectedIcon] 是选中时的填充图标
- * （ICON.md：选中的页面图标使用填充，未选中的使用线性）。
- */
+/** 底栏四个页面。 */
 enum class StariaTab(
     val labelRes: Int,
     val icon: ImageVector,
@@ -93,74 +95,71 @@ enum class CreateKind(val labelRes: Int, val icon: ImageVector) {
     Essay(R.string.create_essay, IconEssay),
 }
 
+// ---------- 尺寸 ----------
+
 /** 底栏高度。新建按钮直径与之相等，两者底边对齐后高度完全一致。 */
-private val CapsuleHeight = 58.dp
-private val CapsuleHPad = 5.dp
-private val CreateButtonSize = CapsuleHeight
+private val BarHeightDp = 58.dp
+
+/** 新建按钮直径。 */
+private val CreateButtonSize = BarHeightDp
+
+/** 底栏与新建按钮之间的间隙。 */
 private val BarGap = 12.dp
+
+/** 滑块（水珠）比面板矮多少。三层架构里 L2/L3 都矮这一截。 */
+private val DropletInset = 4.dp
 
 /** 底栏左右留白。页面里需要对齐底栏元素时引用这个常量，避免两处硬编码走样。 */
 val BarSidePadding = 20.dp
 
 /** 底栏总高度。 */
-val BarHeight: Dp = CapsuleHeight
+val BarHeight: Dp = BarHeightDp
 
-/**
- * 底栏第一个页面按键的圆心相对屏幕左缘的横向偏移。
- *
- * 时间页的竖向时间轴要对齐到这里（README：时间轴对齐左下角页面按键的中心）。
- *
- * 注意：收起态已改为正圆按钮，此时「第一个按键」指的是展开态的第一格，
- * 时间轴仍然对齐这个位置 —— 收起/展开切换时轴线不会跳。
- */
+/** 底栏第一个页面按键的圆心相对屏幕左缘的横向偏移。时间页的竖轴对齐它。 */
 fun navFirstItemCenterX(screenWidth: Dp): Dp {
     val expandedWidth = screenWidth - CreateButtonSize - BarGap
-    val cellWidth = (expandedWidth - CapsuleHPad * 2) / StariaTab.entries.size.toFloat()
-    return BarSidePadding + CapsuleHPad + cellWidth / 2
+    val cellWidth = (expandedWidth - BarSidePadding * 2) / StariaTab.entries.size
+    return BarSidePadding + cellWidth / 2
 }
 
-/**
- * 底栏第一个页面按键的**左边缘**相对屏幕左缘的横向偏移。
- *
- * 时间页的时间轴竖线对齐到这里（需求：竖线对准页面按键左侧）。
- */
-fun navFirstItemLeftX(): Dp = BarSidePadding + CapsuleHPad
+/** 底栏第一个页面按键的左边缘。时间页的竖线对齐它。 */
+fun navFirstItemLeftX(): Dp = BarSidePadding
 
 /**
- * 底部：页面底栏（液态玻璃）+ 新建按钮（圆形，收在右侧）。
+ * 底部：页面底栏（液态玻璃 + 滑块指示器）+ 新建按钮。
  *
- * 交互：
- * - 收起态是一个**正圆按钮**，只显示当前页面的图标与文字
- * - 点击展开为长条胶囊，四项依次淡入
- * - 切页后底栏保持展开（切页不收起）
- * - 每个按键按下时轻微缩放，给出手感反馈
+ * ## 三层结构（移植自 MeloX / BiliNext 的 LiquidGlassTabsBar）
+ *
+ * - **L1 可见面板**：真正的胶囊玻璃，含 vibrancy + blur + lens + 高光/阴影，
+ *   承载四个 tab 的图标与文字。
+ * - **L2 捕获层**：与 L1 同宽、矮 [DropletInset]，**同一份 tab 内容但图标染成强调色**，
+ *   并作为 backdrop 录制下来。它是「滑块里能看见彩色图标」的来源。
+ * - **L3 滑块（水珠）**：一个圆角小胶囊，采样 L2 的内容并施加更强的折射，
+ *   横向停在当前格上。拖动时跟手，松手按弹簧吸附。
+ *
+ * 之所以要 L2：如果滑块直接采样 L1，它采到的就是「已经画好的面板 + 普通图标」，
+ * 滑块里那格图标不会变成强调色。中间加一层专供采样的副本，
+ * 才能做到「滑块罩住哪一格，哪一格就是强调色」。
  */
 @Composable
 fun StariaBottomBar(
     current: StariaTab,
     onSelect: (StariaTab) -> Unit,
     onCreate: (CreateKind) -> Unit,
-    navExpanded: Boolean,
-    onNavExpandedChange: (Boolean) -> Unit,
     createExpanded: Boolean,
     onCreateExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     deleteAction: (() -> Unit)? = null,
 ) {
     BoxWithConstraints(modifier = modifier) {
-        val tabCount = StariaTab.entries.size
         val reserved = CreateButtonSize + BarGap
-        val expandedWidth = maxWidth - reserved
-        val cellWidth = (expandedWidth - CapsuleHPad * 2) / tabCount.toFloat()
+        val barWidth = maxWidth - reserved
 
-        NavCapsule(
+        NavBar(
             modifier = Modifier.align(Alignment.BottomStart),
             current = current,
-            expanded = navExpanded,
-            expandedWidth = expandedWidth,
-            cellWidth = cellWidth,
-            onExpandedChange = onNavExpandedChange,
             onSelect = onSelect,
+            barWidth = barWidth,
         )
 
         if (deleteAction != null) {
@@ -180,9 +179,313 @@ fun StariaBottomBar(
 }
 
 /**
- * 多选模式下的红色删除按钮。
+ * 底栏本体：常驻展开，不再收起。
  *
- * 尺寸与新建按钮完全一致，保证两种状态切换时位置不跳动。
+ * 交互（对齐 MeloX）：
+ * - 点击任意 tab：滑块弹簧滑过去 + 该 tab 内容淡入
+ * - 在滑块上左右拖动：滑块跟手，松手吸附到最近一格并切换
+ * - 滑块始终显示，不再有「收起成圆」这一态
+ */
+@Composable
+private fun NavBar(
+    modifier: Modifier = Modifier,
+    current: StariaTab,
+    onSelect: (StariaTab) -> Unit,
+    barWidth: Dp,
+) {
+    val tabs = StariaTab.entries
+    val tabCount = tabs.size
+    val selectedIndex = tabs.indexOf(current).coerceAtLeast(0)
+
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+
+    // 每格宽度：等分
+    val tabWidth = (barWidth - BarSidePadding * 2) / tabCount
+    val tabWidthPx = with(density) { tabWidth.toPx() }
+
+    // 滑块宽度 = 1.15 格 + 2dp（覆盖图标与文字，但不到两格）
+    val dropletWidth = (tabWidth * 1.15f + 2.dp)
+        .coerceAtMost(barWidth - BarSidePadding * 2)
+    val dropletHeight = BarHeightDp - DropletInset * 2
+    val dropletWidthPx = with(density) { dropletWidth.toPx() }
+
+    // 滑块可移动的左右边界。
+    //
+    // 直接用 `0 .. barWidth - dropletWidth` 会让最左/最右格与胶囊边缘差半个格子的空隙：
+    // 第 0 格的目标中心是 `pad + tabWidth/2`，比 `dropletWidth/2` 更靠右，
+    // 于是滑块停在离边 `pad + (tabWidth - dropletWidth)/2` 的位置 —— 视觉上「离边太远」。
+    //
+    // 这里改成按格中心算出的真实可行区间：
+    // 左界 = 第 0 格中心 - 半宽，右界 = 最后一格中心 - 半宽。
+    // 两者都夹进面板内部，最左/最右格因此贴边更近。
+    val firstCenterPx = with(density) { (BarSidePadding + tabWidth / 2).toPx() }
+    val lastCenterPx = with(density) { (BarSidePadding + tabWidth * (tabCount - 0.5f)).toPx() }
+    val minOffsetPx = (firstCenterPx - dropletWidthPx / 2f).coerceAtLeast(0f)
+    val maxOffsetPx = (lastCenterPx - dropletWidthPx / 2f)
+        .coerceAtMost(with(density) { barWidth.toPx() } - dropletWidthPx)
+
+    // ---- 阻尼拖拽动画 ----
+    val currentSelectedIndex by rememberUpdatedState(selectedIndex)
+    val currentTabs by rememberUpdatedState(tabs)
+    val currentTabWidthPx by rememberUpdatedState(tabWidthPx)
+    val currentDropletWidthPx by rememberUpdatedState(dropletWidthPx)
+    val currentOnSelect by rememberUpdatedState(onSelect)
+
+    val damped = remember(tabCount) {
+        StariaDampedDragAnimation(
+            animationScope = scope,
+            initialValue = selectedIndex.toFloat(),
+            valueRange = 0f..(tabCount - 1).toFloat(),
+            visibilityThreshold = 0.001f,
+            // 按下时放大到 1.39×（78/56，MeloX 原值）
+            pressedScale = 78f / 56f,
+            onTap = { position ->
+                // position 是**整行内容坐标**（手势挂在 tab 行上，行已内缩 BarSidePadding），
+                // 所以直接除以格宽就是格下标。
+                //
+                // 早先按「滑块局部坐标」算（value + (x - 半宽)/格宽）是错的：
+                // 那个公式适用于手势挂在滑块上的情形，搬到整行后每次点击都会
+                // 偏移半个滑块，表现为「点哪个都跳不对」。
+                val index = (position.x / currentTabWidthPx.coerceAtLeast(1f))
+                    .fastRoundToInt()
+                    .fastCoerceIn(0, tabCount - 1)
+                currentOnSelect(currentTabs[index])
+            },
+            onDragStopped = {
+                val target = targetValue.fastRoundToInt().fastCoerceIn(0, tabCount - 1)
+                animateToValue(target.toFloat())
+                if (target != currentSelectedIndex) {
+                    currentOnSelect(currentTabs[target])
+                }
+            },
+            onDrag = { _, dragAmount ->
+                updateValue(
+                    (targetValue + dragAmount.x / currentTabWidthPx.coerceAtLeast(1f))
+                        .fastCoerceIn(0f, (tabCount - 1).toFloat()),
+                )
+            },
+        )
+    }
+
+    // 外部选中变化 → 滑块滑过去
+    var prevSelected by remember { mutableStateOf(selectedIndex) }
+    LaunchedEffect(selectedIndex) {
+        if (damped.targetValue != selectedIndex.toFloat()) {
+            // 从别的 tab 切回来时带一点过冲（Q 弹），普通切换用临界阻尼
+            if (prevSelected != selectedIndex) {
+                damped.animateToValueBouncy(selectedIndex.toFloat())
+            } else {
+                damped.animateToValue(selectedIndex.toFloat())
+            }
+        }
+        prevSelected = selectedIndex
+    }
+
+    // ---- L2 捕获层用的独立 backdrop ----
+    // 之前这里录的是「tab 内容副本」，滑块采样出来就是一份模糊的图标 + 文字，
+    // 再叠在清晰的 tab 行上 ⇒ 文字看着发虚（重影）。
+    // 现在滑块直接采页面背景：它是纯玻璃块，里面不含任何文字，
+    // 层级也挪到 tab 行之下，文字始终由上层清晰绘制。
+    val rootBackdrop = LocalGlassBackdrop.current
+
+    Box(
+        modifier = modifier
+            .width(barWidth)
+            .height(BarHeightDp),
+    ) {
+        // ══ L1：面板玻璃 ══
+        // 按下时整条面板轻微膨胀（scale = 1 + 14dp/宽度 × p），
+        // 与 MeloX 的 `layerBlock` 做法一致 —— 手指压上去时底栏像被按了一下。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .glassBarSurface(
+                    backdrop = rootBackdrop,
+                    shape = RoundedCornerShape(BarHeightDp / 2),
+                    pressProgress = { damped.pressProgress },
+                ),
+        )
+
+        // ══ L3：滑块（水珠）══
+        // 注意绘制顺序：滑块在面板之后、tab 内容之前。
+        // 滑块是「垫在选中项下面的一块玻璃」，不是盖在图标上的蒙层，
+        // 所以图标与文字永远是最上层、最清晰的那一份。
+        Box(
+            modifier = Modifier
+                .offset {
+                    val centerX = firstCenterPx + tabWidthPx * damped.value
+                    val x = (centerX - dropletWidthPx / 2f)
+                        .fastCoerceIn(minOffsetPx, maxOffsetPx)
+                    androidx.compose.ui.unit.IntOffset(x.fastRoundToInt(), 0)
+                }
+                .align(Alignment.CenterStart)
+                // 滑块只负责「看起来」跟随，手势由上层的 tab 行统一接管，
+                // 避免两处 pointerInput 抢事件。
+                .glassDroplet(
+                    backdrop = rootBackdrop,
+                    shape = RoundedCornerShape(dropletHeight / 2),
+                    damped = damped,
+                )
+                .size(dropletWidth, dropletHeight),
+        )
+
+        // ══ 最上层：tab 行（始终清晰，同时承载手势）══
+        // 点击与拖动全部由这一层的 `damped.modifier` 统一处理：
+        // 位移为 0 ⇒ 视作点击，按落到第几格切换；有位移 ⇒ 拖动滑块。
+        //
+        // ⚠ 每个 tab 自己**不能**再挂 clickable：
+        // 那样它的命中坐标是各自格子的局部坐标，而手势层用的是整行坐标，
+        // 两套坐标混在一起会让「点哪个都跳不对」（实测报障的正是这个）。
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = BarSidePadding)
+                .then(damped.modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tabs.forEach { tab ->
+                TabContent(
+                    modifier = Modifier
+                        .width(tabWidth)
+                        .height(BarHeightDp),
+                    tab = tab,
+                    selected = tab == current,
+                    highlight = false,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 一个 tab 的内容：图标 + 文字。
+ *
+ * @param highlight true 时用强调色（供 L2 捕获层采样），false 时用常规墨色
+ */
+@Composable
+private fun TabContent(
+    modifier: Modifier = Modifier,
+    tab: StariaTab,
+    selected: Boolean,
+    highlight: Boolean,
+) {
+    val color = when {
+        highlight -> Ink
+        selected -> Ink
+        else -> InkMuted
+    }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = if (selected) tab.selectedIcon else tab.icon,
+            contentDescription = stringResource(tab.labelRes),
+            modifier = Modifier.size(19.dp),
+            tint = color,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = stringResource(tab.labelRes),
+            fontSize = 9.5.sp,
+            lineHeight = 11.sp,
+            color = color,
+            fontWeight = if (selected && highlight) FontWeight.SemiBold else FontWeight.Normal,
+        )
+    }
+}
+
+/**
+ * 底栏面板玻璃（L1）。
+ *
+ * 参数对齐 MeloX 的 `meloXLiquidBottomBar`：
+ * - vibrancy + blur(2dp) + lens(24dp × pressProgress)
+ * - 折射半径随按压进度增强：静息时很弱，按下时才明显
+ *   （MeloX 用 `lens(r×s, r×s)`，s=0 时整段跳过，避免 NaN）
+ */
+private fun Modifier.glassBarSurface(
+    backdrop: Backdrop?,
+    shape: androidx.compose.ui.graphics.Shape,
+    pressProgress: () -> Float,
+): Modifier {
+    if (backdrop == null) {
+        return background(PaperWhite.copy(alpha = 0.94f), shape)
+    }
+    return this.drawBackdrop(
+        backdrop = backdrop,
+        shape = { shape },
+        effects = {
+            vibrancy()
+            // 模糊度按用户口径：保持 2dp，不为可读性妥协 ——
+            // 玻璃要透、要能看见下面内容的流动感，压住正文不是这里的目标。
+            blur(2.dp.toPx())
+            val p = pressProgress().coerceIn(0f, 1f)
+            // 静息也保留一点折射（面板本身要有厚边），按下时增强
+            val s = 0.45f + 0.55f * p
+            lens(24.dp.toPx() * s, 24.dp.toPx() * s, depthEffect = false)
+        },
+        layerBlock = {
+            // 按下时整条面板膨胀：向外扩散固定的 14dp（不是按比例），
+            // 与 MeloX 的 `1 + 16dp/width × p` 同思路 —— 这样面板「被按了一下」
+            // 的视觉强度与宽度无关，宽屏窄屏手感一致。
+            //
+            // 必须写在 layerBlock 而不是外层 graphicsLayer：
+            // layerBlock 只变换玻璃这一层，backdrop 采样仍是原始尺寸，
+            // 否则膨胀时背景会跟着一起放大（看起来像画面在抖）。
+            val p = pressProgress().coerceIn(0f, 1f)
+            if (p > 0f) {
+                val maxExtra = 14.dp.toPx() * 2f
+                val w = size.width.coerceAtLeast(1f)
+                val s = 1f + (maxExtra / w) * p
+                scaleX = s
+                scaleY = 1f + (0.035f * p)
+            }
+        },
+        onDrawSurface = {
+            // 面板蒙层也按用户口径压薄：玻璃要透，
+            // 下面滚动的内容与面板文字叠一点是可以接受的。
+            drawRect(PaperWhite.copy(alpha = 0.55f))
+        },
+    )
+}
+
+/**
+ * 滑块（L3）。
+ *
+ * 按用户口径，滑块**不做玻璃**：它是一个半透明灰底色块，
+ * 不带模糊、折射、高光、阴影。理由很实际 ——
+ * 玻璃滑块在浅灰页面上几乎看不见（它的采样源和面板太接近），
+ * 而滑块的职责就是「标出当前在哪一格」，可见性优先。
+ *
+ * 只保留两项动态：
+ * - 按压缩放（`layerBlock`，与 MeloX 同一套 scaleX/scaleY 分离弹簧）
+ * - 甩动时的横向拉长
+ *
+ * 缩放仍写在 `layerBlock` 里，原因见 `InteractiveGlassPanel`：
+ * 写在外层 `graphicsLayer` 会连背景采样一起变换，位置会错。
+ */
+private fun Modifier.glassDroplet(
+    backdrop: Backdrop?,
+    shape: androidx.compose.ui.graphics.Shape,
+    damped: StariaDampedDragAnimation,
+): Modifier = this
+    .graphicsLayer {
+        // 速度修正：甩动时横向拉长、纵向压扁，像被甩出去的一块色块
+        val v = damped.velocity.let { if (it.isFinite()) it else 0f } / 10f
+        val widenDenom = 1f - (v * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+        val widenFactor = 1f - (v * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+        val sx = damped.scaleX.let { if (it.isFinite()) it else 1f }
+        val sy = damped.scaleY.let { if (it.isFinite()) it else 1f }
+        scaleX = (sx / widenDenom).let { if (it.isFinite()) it else 1f }
+        scaleY = (sy * widenFactor).let { if (it.isFinite()) it else 1f }
+    }
+    .background(Ink.copy(alpha = 0.10f), shape)
+
+/**
+ * 多选模式下的红色删除按钮。尺寸与新建按钮一致，切换时位置不跳动。
  */
 @Composable
 private fun DeleteButton(
@@ -209,195 +512,7 @@ private fun DeleteButton(
     }
 }
 
-/**
- * 页面底栏本体。
- *
- * 形态在「正圆（收起）」与「长胶囊（展开）」之间连续过渡：
- * - 宽度与圆角一起插值，视觉上就是一个胶囊被拉长 / 缩回圆
- * - 每个按键的透明度跟随展开进度淡入淡出，不会突然出现或消失
- * - 收起态下当前按键横向居中；展开过程中它平滑滑到第一格
- */
-@Composable
-private fun NavCapsule(
-    modifier: Modifier = Modifier,
-    current: StariaTab,
-    expanded: Boolean,
-    expandedWidth: Dp,
-    cellWidth: Dp,
-    onExpandedChange: (Boolean) -> Unit,
-    onSelect: (StariaTab) -> Unit,
-) {
-    // 0 = 完全收起（正圆），1 = 完全展开（长胶囊）
-    val progress by animateFloatAsState(
-        targetValue = if (expanded) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
-        ),
-        label = "nav-progress",
-    )
-
-    // 收起态直径 = 底栏高度，正好是一个正圆
-    val collapsedDiameter = CapsuleHeight
-    val width = androidx.compose.ui.unit.lerp(collapsedDiameter, expandedWidth, progress)
-
-    // 圆角：收起时是圆（= 宽度/2），展开时是胶囊圆角（= 高度/2）。
-    // 两者相等，所以这里统一用高度的一半即可平滑过渡。
-    val shape = RoundedCornerShape(CapsuleHeight / 2)
-
-    GlassPanel(
-        backdrop = LocalGlassBackdrop.current,
-        shape = shape,
-        // 折射高度不能超过最小圆角半径；圆角 = 高度/2 = 29dp，
-        // 按 0.6 收一下，实际折射带落在 8.4dp，既有厚边又不破形。
-        refractionScale = 0.6f,
-        edgeHighlight = 1.dp,
-        modifier = modifier
-            .width(width)
-            .height(CapsuleHeight)
-            // 动画期间每一帧尺寸都在变。玻璃面板会用新尺寸重画 backdrop，
-            // 若不加裁剪，上一帧的采样内容会在边缘留下一圈半透明拖影。
-            // clipToBounds 把绘制严格限制在当前轮廓内，拖影随之消失。
-            .clipToBounds(),
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-
-            // ---------- 展开态：四项固定在各自槽位 ----------
-            // Row 用固定的 cellWidth + 固定的左内边距，宽度不随胶囊变化，
-            // 所以胶囊拉长/缩回时**格子位置完全不动**，只有透明度在变。
-            // 这正是「图标不位移、只原位淡入淡出」的要求。
-            Row(
-                modifier = Modifier
-                    .height(CapsuleHeight)
-                    .padding(horizontal = CapsuleHPad),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StariaTab.entries.forEach { tab ->
-                    NavItem(
-                        modifier = Modifier
-                            .width(cellWidth)
-                            .height(CapsuleHeight),
-                        tab = tab,
-                        selected = tab == current,
-                        alpha = progress,
-                        // 收起态整行都不可点：既避免点到看不见的格子，
-                        // 也避免误切到别的页面（点击由下面的圆形层接管）
-                        enabled = expanded,
-                        onClick = { onSelect(tab) },
-                    )
-                }
-            }
-
-            // ---------- 收起态：当前页图标居中 ----------
-            // 单独一份，居中渲染，随展开进度淡出。
-            // 不放进上面的 Row 里，是因为 Row 的槽位固定在左，
-            // 而圆形按钮的视觉中心在直径的中点 —— 两者差半个格子宽。
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                NavItemContent(
-                    tab = current,
-                    selected = true,
-                    alpha = 1f - progress,
-                )
-            }
-
-            // ---------- 点击层 ----------
-            // 收起时铺满整个圆（58×58），点击展开。
-            // 必须单独一层：上面 Row 的内容会被 clip 裁掉、且已 disabled，
-            // 而这一层的命中区域就是圆本身，不会出现「点了没反应」。
-            if (!expanded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickableNoIndication { onExpandedChange(true) },
-                )
-            }
-        }
-    }
-}
-
-/**
- * 一个底栏按键：图标 + 文字，按下时轻微缩放。
- *
- * @param alpha 透明度。展开/收起靠它做原位淡入淡出
- * @param enabled 透明但占位的项传 false，避免手指点到看不见的按钮
- */
-@Composable
-private fun NavItem(
-    modifier: Modifier = Modifier,
-    tab: StariaTab,
-    selected: Boolean,
-    alpha: Float,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    val press = remember { Animatable(0f) }
-    val pressSpec = spring<Float>(dampingRatio = 0.5f, stiffness = 300f)
-
-    Column(
-        modifier = modifier
-            .graphicsLayer {
-                this.alpha = alpha
-                // 按下时缩到 0.92，松手弹回。不用 ripple：
-                // 纸面 + 墨线的基调下，Material 的水波会糊成一片灰。
-                val s = 1f - 0.08f * press.value
-                scaleX = s
-                scaleY = s
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                enabled = enabled,
-                onClick = onClick,
-            )
-            .pointerInput(enabled) {
-                if (!enabled) return@pointerInput
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    scope.launch { press.animateTo(1f, pressSpec) }
-                    waitForUpOrCancellation()
-                    scope.launch { press.animateTo(0f, pressSpec) }
-                }
-            },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        NavItemContent(tab = tab, selected = selected)
-    }
-}
-
-/** 按键的纯视觉部分（图标 + 文字），点击与动画由外层负责。 */
-@Composable
-private fun NavItemContent(
-    tab: StariaTab,
-    selected: Boolean,
-    alpha: Float = 1f,
-) {
-    Column(
-        modifier = if (alpha >= 1f) Modifier else Modifier.graphicsLayer { this.alpha = alpha },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = if (selected) tab.selectedIcon else tab.icon,
-            contentDescription = stringResource(tab.labelRes),
-            modifier = Modifier.size(20.dp),
-            tint = if (selected) Ink else InkMuted,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = stringResource(tab.labelRes),
-            fontSize = 10.sp,
-            lineHeight = 11.sp,
-            color = if (selected) Ink else InkMuted,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-        )
-    }
-}
-
+/** 新建按钮：点击向上展开三个动作钮。 */
 @Composable
 private fun CreateButton(
     modifier: Modifier = Modifier,
@@ -450,7 +565,6 @@ private fun CreateButton(
                         Icon(
                             imageVector = kind.icon,
                             contentDescription = stringResource(kind.labelRes),
-                            // 图标单独淡入：面板本身始终是玻璃，不能被 alpha 洗淡
                             modifier = Modifier
                                 .size(19.dp)
                                 .graphicsLayer { alpha = progress },

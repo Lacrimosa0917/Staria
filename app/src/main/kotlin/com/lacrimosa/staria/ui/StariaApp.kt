@@ -142,7 +142,6 @@ fun StariaApp() {
     val nicknameStore = remember { NicknameStore(context) }
 
     var currentTab by remember { mutableStateOf(StariaTab.Home) }
-    var navExpanded by remember { mutableStateOf(false) }
     var createExpanded by remember { mutableStateOf(false) }
 
     var nickname by remember { mutableStateOf(nicknameStore.load()) }
@@ -211,8 +210,8 @@ fun StariaApp() {
         }
     }
 
+    // 底栏已常驻展开，不再有「收起」这一态；这里只负责收新建菜单。
     val collapseBar = {
-        navExpanded = false
         createExpanded = false
     }
 
@@ -419,12 +418,9 @@ fun StariaApp() {
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) {
-                    // 点空白处收起底栏展开口。
-                    // 首页不收起：首页是留白最多的页面，点空白只是为了放下一次
-                    // 卡片换位，不该顺手把底栏收掉（否则每次换卡都要重新展开）。
-                    if (currentTab != StariaTab.Home && (navExpanded || createExpanded)) {
-                        collapseBar()
-                    }
+                    // 点空白处收起新建菜单展开的口。
+                    // 底栏本身常驻展开，不再有「收起底栏」这个动作。
+                    if (createExpanded) collapseBar()
                 },
         ) {
             Crossfade(
@@ -536,8 +532,6 @@ fun StariaApp() {
             current = currentTab,
             onSelect = { currentTab = it },
             onCreate = onCreate,
-            navExpanded = navExpanded,
-            onNavExpandedChange = { navExpanded = it },
             createExpanded = createExpanded,
             onCreateExpandedChange = { createExpanded = it },
             // 多选时右下角换成同位置的红色删除按钮
