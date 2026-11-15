@@ -292,21 +292,40 @@ private fun NavBar(
         prevSelected = selectedIndex
     }
 
-    // ---- L2 捕获层用的独立 backdrop ----
-    // 之前这里录的是「tab 内容副本」，滑块采样出来就是一份模糊的图标 + 文字，
-    // 再叠在清晰的 tab 行上 ⇒ 文字看着发虚（重影）。
-    // 现在滑块直接采页面背景：它是纯玻璃块，里面不含任何文字，
-    // 层级也挪到 tab 行之下，文字始终由上层清晰绘制。
+    // ---- backdrop ----
+    // 页面背景：面板用它采样「下面的内容」。
     val rootBackdrop = LocalGlassBackdrop.current
+    // 面板自身：滑块用它采样「底栏这一层」。
+    //
+    // 这是本轮的关键修正。之前滑块直接采 rootBackdrop（页面背景），
+    // 于是滑块里显示的是**页面内容**而不是底栏的纸面 —— 看起来就是
+    // 「滑块区域直接穿透底栏」。MeloX 的做法是让滑块采 L2 捕获层
+    // （面板的同尺寸副本），滑块里永远是底栏自己的材质。
+    //
+    // 这里用 drawBackdrop 的 exportedBackdrop 参数：面板在画 backdrop 的
+    // 同时把它录进 barBackdrop，滑块再以它为源，天然同源、不会成环
+    // （这是库文档 Glass Bottom Sheet 一节给出的正解）。
+    val barBackdrop = rememberLayerBackdrop()
 
     Box(
         modifier = modifier
             .width(barWidth)
-            .height(BarHeightDp),
+            .height(BarHeightDp)
+            // 整条底栏（玻璃 + 图标 + 文字）随按压一起放大。
+            // MeloX 的 L1 膨胀就是整体 scale —— 早期我把它写在面板的
+            // layerBlock 里，只缩玻璃不缩内容，与需求不符。
+            .graphicsLayer {
+                val p = damped.pressProgress.coerceIn(0f, 1f)
+                if (p > 0f) {
+                    val maxExtra = 10.dp.toPx() * 2f
+                    val w = size.width.coerceAtLeast(1f)
+                    val s = 1f + (maxExtra / w) * p
+                    scaleX = s
+                    scaleY = 1f + 0.03f * p
+                }
+            },
     ) {
         // ══ L1：面板玻璃 ══
-        // 按下时整条面板轻微膨胀（scale = 1 + 14dp/宽度 × p），
-        // 与 MeloX 的 `layerBlock` 做法一致 —— 手指压上去时底栏像被按了一下。
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -314,6 +333,8 @@ private fun NavBar(
                     backdrop = rootBackdrop,
                     shape = RoundedCornerShape(BarHeightDp / 2),
                     pressProgress = { damped.pressProgress },
+                    // 面板在画背景的同时把「自己」录进 barBackdrop，供滑块采样
+                    exportedBackdrop = barBackdrop,
                 ),
         )
 
@@ -323,8 +344,9 @@ private fun NavBar(
         //
         // 两态（对齐 MeloX 的 L3 水珠）：
         // - **静息**：灰底色块，无模糊/折射 —— 它只是「当前在这格」的标记
-        // - **按压缩放**：变成全透明带折射的玻璃，能看见下方面板内容被弯折
-        //   切换由 `glassDroplet` 内部按 pressProgress 连续插值，不是硬切
+        // - **按下**：灰底淡出，变成带折射的透明玻璃
+        //   由于采样源是 barBackdrop（底栏自己），折射弯折的是
+        //   **底栏的纸面**，不会穿透到下面的页面内容。
         Box(
             modifier = Modifier
                 .offset {
@@ -336,7 +358,7 @@ private fun NavBar(
                 // 滑块只负责「看起来」跟随，手势由上层的 tab 行统一接管，
                 // 避免两处 pointerInput 抢事件。
                 .glassDroplet(
-                    backdrop = rootBackdrop,
+                    backdrop = barBackdrop,
                     shape = RoundedCornerShape(dropletHeight / 2),
                     damped = damped,
                 )
@@ -350,11 +372,6 @@ private fun NavBar(
         // ⚠ 每个 tab 自己**不能**再挂 clickable：
         // 那样它的命中坐标是各自格子的局部坐标，而手势层用的是整行坐标，
         // 两套坐标混在一起会让「点哪个都跳不对」。
-        //
-        // ⚠ 行本身**不能**跟着面板一起缩放：
-        // 面板按下时膨胀，若这一行也在同一个缩放层里，图标和文字会一起变大。
-        // 面板的 scale 写在它自己的 layerBlock 里（只变换玻璃那一层），
-        // 所以这一行天然不受影响 —— 这里只做位置对齐。
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -428,6 +445,7 @@ private fun Modifier.glassBarSurface(
     backdrop: Backdrop?,
     shape: androidx.compose.ui.graphics.Shape,
     pressProgress: () -> Float,
+    exportedBackdrop: com.kyant.backdrop.backdrops.LayerBackdrop? = null,
 ): Modifier {
     if (backdrop == null) {
         return background(PaperWhite.copy(alpha = 0.94f), shape)
@@ -437,27 +455,26 @@ private fun Modifier.glassBarSurface(
         shape = { shape },
         // 效果栈与其余玻璃控件（新建按钮、头像、二级页圆钮）**完全同源**：
         // 都走 stariaGlassEffects，参数只在 GlassSpec 里定义一次。
-        // 之前底栏自己写了一套 blur(2dp) + lens(24dp)，与右侧新建按钮
-        // 的 6dp/14dp 不一致，并排看就是两种材质。
         effects = { stariaGlassEffects() },
+        // 面板在画背景的同时把「自己」录进 exportedBackdrop。
+        // 滑块以它为采样源，于是滑块里看到的永远是底栏纸面，
+        // 而不是下面的页面内容（否则就是「穿透」）。
+        //
+        // 这是库文档 Glass Bottom Sheet 一节的正解：
+        // 直接给内层控件传同一个 backdrop 会成环（画自己被自己画），
+        // exportedBackdrop 会跳过内容绘制，只录外壳。
+        exportedBackdrop = exportedBackdrop,
         layerBlock = {
-            // 按下时整条面板膨胀：向外扩散固定的 14dp（不是按比例），
-            // 与 MeloX 的 `1 + 16dp/width × p` 同思路 —— 这样面板「被按了一下」
-            // 的视觉强度与宽度无关，宽屏窄屏手感一致。
-            //
-            // 必须写在 layerBlock：它只变换玻璃这一层，backdrop 采样仍是原始尺寸，
-            // 否则膨胀时背景会跟着放大（看起来像画面在抖）。
-            // 内部的 tab 行不在这个变换里，所以图标与文字不会跟着变大。
+            // ⚠ 这里**不做**缩放：整条底栏（含图标文字）的按压缩放
+            // 由外层 Box 的 graphicsLayer 统一负责，这样内容才会一起放大。
+            // 早期把 scale 写在这里，只变换玻璃层，图标文字不动 —— 与需求相反。
             val p = pressProgress().coerceIn(0f, 1f)
             if (p > 0f) {
-                val maxExtra = 14.dp.toPx() * 2f
-                val w = size.width.coerceAtLeast(1f)
-                scaleX = 1f + (maxExtra / w) * p
-                scaleY = 1f + 0.035f * p
+                // 只保留一点点纵向拉伸作为「被压扁」的触感，
+                // 幅度极小，肉眼几乎不察，不会与内容缩放打架。
+                scaleY = 1f
             }
         },
-        // 不额外叠蒙层：与 GlassPanel 一致（它现在也不画 surface，
-        // 玻璃的可见性由 blur + lens + 细描边共同给出）。
     )
 }
 
