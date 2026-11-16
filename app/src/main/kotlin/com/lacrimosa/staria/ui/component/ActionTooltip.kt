@@ -3,6 +3,8 @@ package com.lacrimosa.staria.ui.component
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -29,21 +31,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
-import com.kyant.backdrop.Backdrop
+import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Danger
-import com.lacrimosa.staria.ui.theme.GlassSpec
 import com.lacrimosa.staria.ui.theme.Ink
-import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
+import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PopupRadius
-import com.lacrimosa.staria.ui.theme.supportsRenderEffect
+import com.lacrimosa.staria.ui.theme.Scrim
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
@@ -95,6 +102,8 @@ fun ActionTooltip(
     anchor: Offset,
     onDismiss: () -> Unit,
     preferredCorner: AnchorCorner = AnchorCorner.BottomLeft,
+    /** 被长按卡片的窗口矩形；压暗遮罩会在此处挖洞，让卡片保持原亮度。 */
+    keepLit: Rect? = null,
 ) {
     if (actions.isEmpty()) return
 
@@ -104,8 +113,8 @@ fun ActionTooltip(
     if (host != null) {
         // 只要这个组合存在，就代表「页面希望菜单显示」。
         // key 用 anchor：同一锚点重复组合不会重复 show。
-        DisposableEffect(anchor) {
-            host.show(anchor, actions, preferredCorner, onDismiss)
+        DisposableEffect(anchor, keepLit) {
+            host.show(anchor, actions, preferredCorner, onDismiss, keepLit)
             onDispose { /* 关闭由 onDismiss / 页面状态负责 */ }
         }
         return
@@ -117,6 +126,7 @@ fun ActionTooltip(
         anchor = anchor,
         onDismiss = onDismiss,
         preferredCorner = preferredCorner,
+        keepLit = keepLit,
     )
 }
 
@@ -135,6 +145,8 @@ fun TooltipSurface(
     anchor: Offset,
     onDismiss: () -> Unit,
     preferredCorner: AnchorCorner = AnchorCorner.BottomLeft,
+    /** 被长按卡片的窗口矩形；压暗遮罩会在此处挖洞，让卡片保持原亮度。 */
+    keepLit: Rect? = null,
 ) {
     if (actions.isEmpty()) return
 
@@ -172,47 +184,47 @@ fun TooltipSurface(
         }
     }
 
-    val backdrop = LocalGlassBackdrop.current
-    if (backdrop != null && supportsRenderEffect) {
-        InWindowTooltip(
-            actions = actions,
-            anchor = anchor,
-            appear = appear.value,
-            requestClose = ::requestClose,
-            backdrop = backdrop,
-            preferredCorner = preferredCorner,
-        )
-    } else {
-        PopupTooltip(
-            actions = actions,
-            anchor = anchor,
-            appear = appear.value,
-            requestClose = ::requestClose,
-            preferredCorner = preferredCorner,
-        )
-    }
+    TooltipBody(
+        actions = actions,
+        anchor = anchor,
+        appear = appear.value,
+        requestClose = ::requestClose,
+        preferredCorner = preferredCorner,
+        keepLit = keepLit,
+    )
 }
 
 /**
- * 同窗口内的玻璃 tooltip。
+ * tooltip 的实际绘制：压暗遮罩 + 淡灰不透明菜单。
  *
- * 出现动画：从 0.92 缩放到 1、透明度 0 → 1，弹簧收尾。
- * 不突然弹出，与底栏的展开动画保持同一套手感。
+ * ## 为什么不再用玻璃面板
+ *
+ * 早先菜单是一块液态玻璃（`drawBackdrop`）。它每帧都要重采样背景并重算
+ * 折射/模糊，在弹簧动画期间边缘折射带随尺寸重算，背景上就出现明显的
+ * 阴影闪动；调参、锁缩放、改真实尺寸都未能彻底消除。
+ *
+ * 现在面板是与页面背景同色的淡灰实心块，不依赖背景采样，任何尺寸与
+ * 透明度动画都不会闪；层次由遮罩提供。
  */
 @Composable
-private fun InWindowTooltip(
+private fun TooltipBody(
     actions: List<TooltipAction>,
     anchor: Offset,
     appear: Float,
     requestClose: (afterClose: () -> Unit) -> Unit,
-    backdrop: Backdrop,
     preferredCorner: AnchorCorner,
+    keepLit: Rect?,
 ) {
     val density = LocalDensity.current
 
     // 过冲时 appear > 1，scale 会短暂超过 1 再回落，形成「展开后小幅回弹」。
+    // 面板是纯色、不采样背景，过冲不会引起任何背景闪烁。
     val scale = 0.92f + 0.08f * appear
     val alpha = appear.coerceIn(0f, 1f)
+
+    // 颜色令牌在组合期取出，供 Canvas 闭包捕获
+    val scrimColor = Scrim
+    val surfaceColor = PageBackground
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val screenW = constraints.maxWidth.toFloat()
@@ -223,104 +235,62 @@ private fun InWindowTooltip(
         val m = with(density) { TooltipMargin.toPx() }
         val pos = resolvePosition(anchor, w, h, m, screenW, screenH, preferredCorner)
 
-        // 点空白关闭：铺满整屏的透明层，位于面板之下
-        Box(
+        // 点空白关闭 + 压暗背景。遮罩随 appear 淡入淡出；
+        // 被长按卡片（keepLit）处挖洞，保持原亮度。
+        //
+        // 注意 clickable 要等菜单基本展开后才启用：触发 tooltip 的正是长按后的
+        // 抬手，遮罩若立刻可点，会把这次抬手当成「点空白」当场关掉。
+        Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { requestClose {} },
+                .then(
+                    if (appear >= 0.98f) {
+                        Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { requestClose {} },
+                        )
+                    } else {
+                        Modifier
+                    },
                 ),
-        )
+        ) {
+            val scrimAlpha = (alpha * scrimColor.alpha).coerceIn(0f, 1f)
+            // 单独开一层，才能用 BlendMode.Clear 把卡片区域「擦」回原亮度
+            drawIntoCanvas { canvas ->
+                canvas.saveLayer(Rect(Offset.Zero, size), Paint())
+                drawRect(color = scrimColor, alpha = scrimAlpha)
+                val lit = keepLit
+                if (lit != null) {
+                    // 圆角矩形挖洞：与卡片圆角一致，看起来是「这张卡被拎起来」，
+                    // 而不是在背景上开了一条白带
+                    val radiusPx = CardRadius.toPx()
+                    drawRoundRect(
+                        color = Color.Black,
+                        topLeft = Offset(lit.left, lit.top),
+                        size = Size(lit.width, lit.height),
+                        cornerRadius = CornerRadius(radiusPx, radiusPx),
+                        blendMode = BlendMode.Clear,
+                    )
+                }
+                canvas.restore()
+            }
+        }
 
-        GlassPanel(
-            backdrop = backdrop,
-            shape = RoundedCornerShape(PopupRadius),
-            // 面板尺寸小、圆角 12dp，折射带按 0.6 收窄避免边缘断裂
-            refractionScale = 0.6f,
-            edgeHighlight = 1.dp,
-            // tooltip 专用：更高的模糊 + 一层薄蒙层，保证菜单文字可读
-            blurDp = GlassSpec.TOOLTIP_BLUR_DP,
-            surfaceAlpha = GlassSpec.TOOLTIP_SURFACE_ALPHA,
-            // 弹性缩放只作用于玻璃层（layerBlock），采样到的背景阴影不动，
-            // 否则阴影跟着面板一起弹，很突兀。
-            layerBlock = {
-                scaleX = scale
-                scaleY = scale
-            },
+        // 菜单面板：与全局背景同色的淡灰实心块，保证可读性
+        Box(
             modifier = Modifier
                 .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
                 .width(TooltipWidth)
-                .graphicsLayer { this.alpha = alpha }
+                .graphicsLayer {
+                    this.alpha = alpha
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .background(surfaceColor, RoundedCornerShape(PopupRadius))
                 .padding(vertical = TooltipPadV),
         ) {
-            // 内容与玻璃层用相同倍率缩放，才能跟玻璃边缘对齐。
-            Box(modifier = Modifier.graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }) {
-                TooltipItems(actions = actions, requestClose = requestClose)
-            }
-        }
-    }
-}
-
-/** 跨窗口的降级版 tooltip（低版本系统）。 */
-@Composable
-private fun PopupTooltip(
-    actions: List<TooltipAction>,
-    anchor: Offset,
-    appear: Float,
-    requestClose: (afterClose: () -> Unit) -> Unit,
-    preferredCorner: AnchorCorner,
-) {
-    val density = LocalDensity.current
-
-    val scale = 0.92f + 0.08f * appear
-    val alpha = appear.coerceIn(0f, 1f)
-
-    Popup(
-        alignment = Alignment.TopStart,
-        offset = IntOffset.Zero,
-        onDismissRequest = { requestClose {} },
-        properties = PopupProperties(focusable = false),
-    ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val screenW = constraints.maxWidth.toFloat()
-            val screenH = constraints.maxHeight.toFloat()
-
-            val w = with(density) { TooltipWidth.toPx() }
-            val h = with(density) { (TooltipItemHeight * actions.size + TooltipPadV * 2).toPx() }
-            val m = with(density) { TooltipMargin.toPx() }
-            val pos = resolvePosition(anchor, w, h, m, screenW, screenH, preferredCorner)
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { requestClose {} },
-                    ),
-            )
-
-            GlassPanel(
-                backdrop = null,
-                shape = RoundedCornerShape(PopupRadius),
-                surfaceAlpha = GlassSpec.TOOLTIP_SURFACE_ALPHA,
-                modifier = Modifier
-                    .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
-                    .width(TooltipWidth)
-                    .graphicsLayer {
-                        this.alpha = alpha
-                        scaleX = scale
-                        scaleY = scale
-                    }
-                    .padding(vertical = TooltipPadV),
-            ) {
-                TooltipItems(actions = actions, requestClose = requestClose)
-            }
+            TooltipItems(actions = actions, requestClose = requestClose)
         }
     }
 }

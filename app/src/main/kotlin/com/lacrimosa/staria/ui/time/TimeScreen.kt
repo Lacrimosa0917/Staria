@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -146,6 +147,8 @@ fun TimeScreen(
     var tooltipEntry by remember { mutableStateOf<DiaryEntry?>(null) }
     // 长按点在窗口里的位置，tooltip 据此决定贴哪个角
     var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
+    // 被长按那一行的窗口矩形：tooltip 遮罩在此挖洞，保持该行原亮度
+    var tooltipKeepLit by remember { mutableStateOf<Rect?>(null) }
 
     // id -> 条目，供批量删除时取回对象
     val diaryLookup: Map<Long, DiaryEntry> = remember(entries) {
@@ -264,10 +267,11 @@ fun TimeScreen(
                                                 expandedId = if (expandedId == entry.id) null else entry.id
                                             }
                                         },
-                                        onLongPressTitle = { entry, pos ->
+                                        onLongPressTitle = { entry, pos, rect ->
                                             onUserInteract()
                                             if (!selection.isActive) {
                                                 tooltipAnchor = pos
+                                                tooltipKeepLit = rect
                                                 tooltipEntry = entry
                                             }
                                         },
@@ -304,6 +308,7 @@ fun TimeScreen(
         tooltipEntry?.let { entry ->
             ActionTooltip(
                 anchor = tooltipAnchor,
+                keepLit = tooltipKeepLit,
                 actions = listOf(
                     TooltipAction(
                         label = "编辑",
@@ -356,7 +361,7 @@ private fun TimelineGroup(
     expandedId: Long?,
     selection: SelectionState,
     onClickTitle: (DiaryEntry) -> Unit,
-    onLongPressTitle: (DiaryEntry, Offset) -> Unit,
+    onLongPressTitle: (DiaryEntry, Offset, Rect) -> Unit,
     onLongPressDate: () -> Unit,
 ) {
     Row(modifier = Modifier.fillMaxWidth()) {
@@ -405,7 +410,7 @@ private fun TimelineGroup(
                     selectionMode = selection.isActive,
                     selected = selection.contains(entry.id),
                     onClick = { onClickTitle(entry) },
-                    onLongPress = { pos -> onLongPressTitle(entry, pos) },
+                    onLongPress = { pos, rect -> onLongPressTitle(entry, pos, rect) },
                 )
             }
             Spacer(Modifier.height(18.dp))

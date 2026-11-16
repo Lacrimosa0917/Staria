@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 
 /**
  * 一次 tooltip 请求。
@@ -13,12 +14,15 @@ import androidx.compose.ui.geometry.Offset
  * @param anchor 长按点在窗口坐标系里的位置
  * @param actions 菜单项
  * @param onDismiss 关闭时回调（各页面用它清理自己的 tooltip 状态）
+ * @param keepLit 被长按卡片的窗口矩形。压暗遮罩会在它位置挖洞，
+ *   让这张卡保持原亮度（视觉上像「从纸面里被拎起来」）。null 表示整屏压暗。
  */
 data class TooltipRequest(
     val anchor: Offset,
     val actions: List<TooltipAction>,
     val preferredCorner: AnchorCorner,
     val onDismiss: () -> Unit,
+    val keepLit: Rect? = null,
 )
 
 /**
@@ -46,9 +50,10 @@ class TooltipHostState {
         actions: List<TooltipAction>,
         preferredCorner: AnchorCorner = AnchorCorner.BottomLeft,
         onDismiss: () -> Unit,
+        keepLit: Rect? = null,
     ) {
         if (actions.isEmpty()) return
-        current = TooltipRequest(anchor, actions, preferredCorner, onDismiss)
+        current = TooltipRequest(anchor, actions, preferredCorner, onDismiss, keepLit)
     }
 
     /** 关闭并回调，保证页面侧状态一起清掉。 */

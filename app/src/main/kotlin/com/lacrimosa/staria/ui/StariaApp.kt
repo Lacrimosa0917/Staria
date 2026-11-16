@@ -739,10 +739,7 @@ fun StariaApp(
         }
     }
 
-    // ---------- 全局 tooltip（液态玻璃） ----------
-    // 必须渲染在 layerBackdrop 子树**之外**：
-    // 玻璃面板要重画 backdrop 录到的内容，若它自己也在被录的子树里，
-    // 就成了「画自己」的递归 —— 实机会栈溢出崩溃。
+    // ---------- 全局 tooltip（压暗遮罩 + 淡灰菜单） ----------
     // 页面只负责发起请求（见 TooltipHostState），这里统一绘制。
     tooltipHost.current?.let { req ->
         TooltipSurface(
@@ -750,6 +747,7 @@ fun StariaApp(
             anchor = req.anchor,
             onDismiss = { tooltipHost.dismiss() },
             preferredCorner = req.preferredCorner,
+            keepLit = req.keepLit,
         )
     }
     }

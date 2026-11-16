@@ -23,6 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -58,12 +61,15 @@ fun DiaryTitleRow(
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongPress: (Offset) -> Unit,
+    /** 参数：长按点的窗口坐标、本行的窗口矩形（供 tooltip 挖洞保持亮度）。 */
+    onLongPress: (Offset, Rect) -> Unit,
 ) {
     val shift = if (selectionMode) SelectShift else 0.dp
 
-    // 本行在窗口里的左上角，用于把手势坐标换算成窗口坐标
+    // 本行在窗口里的左上角与尺寸，用于把手势坐标换算成窗口坐标，
+    // 并给 tooltip 提供「保持原亮度」的矩形范围
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
+    var windowSize by remember { mutableStateOf(IntSize.Zero) }
 
     Column(
         modifier = Modifier
@@ -82,6 +88,7 @@ fun DiaryTitleRow(
                     .padding(start = shift)
                     .onGloballyPositioned { coords ->
                         windowOrigin = coords.positionInWindow()
+                        windowSize = coords.size
                     }
                     // 点击与长按必须放在**同一个** detectTapGestures 里：
                     // 拆成 combinedClickable + pointerInput 时，
@@ -91,7 +98,18 @@ fun DiaryTitleRow(
                         detectTapGestures(
                             onTap = { onClick() },
                             onLongPress = { local ->
-                                if (!selectionMode) onLongPress(windowOrigin + local)
+                                if (!selectionMode) {
+                                    onLongPress(
+                                        windowOrigin + local,
+                                        Rect(
+                                            offset = windowOrigin,
+                                            size = Size(
+                                                windowSize.width.toFloat(),
+                                                windowSize.height.toFloat(),
+                                            ),
+                                        ),
+                                    )
+                                }
                             },
                         )
                     }

@@ -23,6 +23,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -86,6 +89,8 @@ fun ThinkScreen(
 
     var tooltipEssay by remember { mutableStateOf<Essay?>(null) }
     var tooltipAnchor by remember { mutableStateOf(Offset.Zero) }
+    // 被长按卡片的窗口矩形：tooltip 遮罩在此挖洞，保持该卡片原亮度
+    var tooltipKeepLit by remember { mutableStateOf<Rect?>(null) }
 
     if (ordered.isEmpty()) {
         Box(
@@ -136,10 +141,11 @@ fun ThinkScreen(
                             onOpen(essay)
                         }
                     },
-                    onLongPress = { pos ->
+                    onLongPress = { pos, rect ->
                         onUserInteract()
                         if (!selection.isActive) {
                             tooltipAnchor = pos
+                            tooltipKeepLit = rect
                             tooltipEssay = essay
                         }
                     },
@@ -154,6 +160,7 @@ fun ThinkScreen(
         tooltipEssay?.let { essay ->
             ActionTooltip(
                 anchor = tooltipAnchor,
+                keepLit = tooltipKeepLit,
                 actions = listOf(
                     TooltipAction(
                         label = "编辑",
@@ -201,10 +208,12 @@ private fun EssayCard(
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongPress: (Offset) -> Unit,
+    /** 参数：长按点的窗口坐标、本卡片的窗口矩形（供 tooltip 挖洞保持亮度）。 */
+    onLongPress: (Offset, Rect) -> Unit,
 ) {
     val shift = if (selectionMode) SelectShift else 0.dp
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
+    var windowSize by remember { mutableStateOf(IntSize.Zero) }
 
     Box(
         modifier = Modifier
@@ -212,6 +221,7 @@ private fun EssayCard(
             .padding(horizontal = BarSidePadding)
             .onGloballyPositioned { coords ->
                 windowOrigin = coords.positionInWindow()
+                windowSize = coords.size
             }
             // 纯白卡面，不描边：与 #F5F5F5 底色的层次只靠色差
             .background(PaperWhite, RoundedCornerShape(CardRadius))
@@ -220,7 +230,18 @@ private fun EssayCard(
                 detectTapGestures(
                     onTap = { onClick() },
                     onLongPress = { local ->
-                        if (!selectionMode) onLongPress(windowOrigin + local)
+                        if (!selectionMode) {
+                            onLongPress(
+                                windowOrigin + local,
+                                Rect(
+                                    offset = windowOrigin,
+                                    size = Size(
+                                        windowSize.width.toFloat(),
+                                        windowSize.height.toFloat(),
+                                    ),
+                                ),
+                            )
+                        }
                     },
                 )
             }
