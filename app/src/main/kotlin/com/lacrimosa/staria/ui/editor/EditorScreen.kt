@@ -505,6 +505,14 @@ private fun SaveButton(onClick: () -> Unit) {
 private val SavedCapsuleWidth = 96.dp
 
 /**
+ * 主题色蒙层的最大不透明度。
+ *
+ * 不做成 1f（纯色块）：半透明既有主题色的辨识度，
+ * 又能透出下面的玻璃与页面内容，观感更轻。
+ */
+private const val SavedTintMaxAlpha = 0.55f
+
+/**
  * 左上角返回键：保存后向右拉伸成「已保存」胶囊。
  *
  * 收起态是原来的圆形返回键；[showSaved] 为 true 时：
@@ -546,7 +554,7 @@ private fun BackWithSavedNotice(
     val themeColor = LocalThemeColor.current
     val tintColor = if (themeColor == ThemeColor.Plain) null else themeColor.accent()
     val tintAlpha by animateFloatAsState(
-        targetValue = if (showSaved && tintColor != null) 1f else 0f,
+        targetValue = if (showSaved && tintColor != null) SavedTintMaxAlpha else 0f,
         animationSpec = tween(durationMillis = 200),
         label = "saved-tint-alpha",
     )
@@ -600,9 +608,9 @@ private fun BackWithSavedNotice(
             ) {
                 Text(
                     text = "已保存",
-                    // 有主题色蒙层时用白字，保证在彩色底上可读；
-                    // 简约白没有蒙层，仍用墨色。
-                    color = if (tintColor != null) PaperWhite else Ink,
+                    // 蒙层是半透明的，底色整体偏浅，墨色文字的对比度最好；
+                    // 简约白没有蒙层，同样是墨水色。
+                    color = Ink,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                 )

@@ -687,6 +687,14 @@ private fun CreateButton(
             val progress = progresses[index].value
             val distancePx = with(LocalDensity.current) { distance.toPx() }
 
+            // 只有「缩放」必须钳住上限 1：
+            // 玻璃层在 layerBlock 里缩放，放大到超过自身布局尺寸的部分
+            // 会被图层裁掉，弹簧回落（progress 穿过 1 往下探）时又放回来，
+            // 就成了「落到最低点时被截断、随后闪回」。
+            // 位移走的是 layout offset（不受图层裁剪），所以保留原始 progress，
+            // 过冲带来的 Q 弹手感还在。
+            val scaleProgress = progress.coerceIn(0f, 1f)
+
             InteractiveGlassPanel(
                 backdrop = LocalGlassBackdrop.current,
                 shape = CircleShape,
@@ -698,7 +706,7 @@ private fun CreateButton(
                 },
                 // 缩放放进玻璃层（layerBlock）：缩放以中心为原点，
                 // backdrop 采样随缩放一起，不会露出未采样区域。
-                layerScale = { 0.55f + 0.45f * progress },
+                layerScale = { 0.55f + 0.45f * scaleProgress },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     // 平移用 layout offset（不是 layerBlock translation）：
@@ -713,7 +721,7 @@ private fun CreateButton(
                         contentDescription = stringResource(kind.labelRes),
                         modifier = Modifier
                             .size(19.dp)
-                            .graphicsLayer { alpha = progress },
+                            .graphicsLayer { alpha = progress.coerceIn(0f, 1f) },
                         tint = Ink,
                     )
                 }
