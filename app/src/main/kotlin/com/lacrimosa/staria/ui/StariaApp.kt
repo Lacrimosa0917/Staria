@@ -31,6 +31,8 @@ import com.lacrimosa.staria.data.DarkMode
 import com.lacrimosa.staria.data.EditDraft
 import com.lacrimosa.staria.data.EditKind
 import com.lacrimosa.staria.data.Essay
+import com.lacrimosa.staria.data.LibrarySnapshot
+import com.lacrimosa.staria.data.LibraryStore
 import com.lacrimosa.staria.data.NicknameStore
 import com.lacrimosa.staria.data.PaperNote
 import com.lacrimosa.staria.data.RecordCounts
@@ -173,6 +175,8 @@ fun StariaApp(
 ) {
     val context = LocalContext.current
     val nicknameStore = remember { NicknameStore(context) }
+    // 内容库持久化：日记 / 纸条 / 随笔 / 星尘
+    val libraryStore = remember { LibraryStore(context) }
 
     var currentTab by remember { mutableStateOf(StariaTab.Home) }
     var createExpanded by remember { mutableStateOf(false) }
@@ -197,15 +201,29 @@ fun StariaApp(
     var editDraft by remember { mutableStateOf<EditDraft?>(null) }
 
     // 日记数据：删除后从列表移除（时间页不再展示）
-    var diaryEntries by remember { mutableStateOf(SampleData.diaryEntries) }
+    // 首次运行从持久化库读取，无存档时用示例数据初始化。
+    val loaded = remember { libraryStore.load() }
+    var diaryEntries by remember { mutableStateOf(loaded?.diaries ?: SampleData.diaryEntries) }
     // 纸条数据：首页卡片堆叠与纸条页共用
-    var paperNotes by remember { mutableStateOf(SampleData.notes) }
+    var paperNotes by remember { mutableStateOf(loaded?.papers ?: SampleData.notes) }
     // 随笔数据：思索页
-    var essays by remember { mutableStateOf(SampleData.essays) }
+    var essays by remember { mutableStateOf(loaded?.essays ?: SampleData.essays) }
 
     // 星尘（回收站）。所有删除都先进这里，恢复时再写回对应列表。
     // 顺序即删除顺序，展示时倒序（新删除的在上方）
-    var trash by remember { mutableStateOf<List<TrashItem>>(emptyList()) }
+    var trash by remember { mutableStateOf(loaded?.trash ?: emptyList()) }
+
+    // 每次内容变化就落盘（SharedPreferences 是异步 apply，够用）
+    LaunchedEffect(diaryEntries, paperNotes, essays, trash) {
+        libraryStore.save(
+            LibrarySnapshot(
+                diaries = diaryEntries,
+                papers = paperNotes,
+                essays = essays,
+                trash = trash,
+            ),
+        )
+    }
 
     // 二级页面：星尘 / 设置。null 表示不展示
     var showTrash by remember { mutableStateOf(false) }

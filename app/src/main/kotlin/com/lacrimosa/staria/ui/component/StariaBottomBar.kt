@@ -2,6 +2,7 @@ package com.lacrimosa.staria.ui.component
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -704,6 +705,16 @@ private fun CreateButton(
             }
         }
 
+        // 主按钮加号 → 叉号的旋转，随展开/收起平滑过渡（带过冲，与动作钮同节奏）
+        val plusRotation by animateFloatAsState(
+            targetValue = if (expanded) 45f else 0f,
+            animationSpec = spring(
+                dampingRatio = 0.55f,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+            label = "create-plus-rotation",
+        )
+
         InteractiveGlassPanel(
             backdrop = LocalGlassBackdrop.current,
             shape = CircleShape,
@@ -719,7 +730,7 @@ private fun CreateButton(
                     ),
                     modifier = Modifier
                         .size(22.dp)
-                        .graphicsLayer { rotationZ = 45f * (if (expanded) 1f else 0f) },
+                        .graphicsLayer { rotationZ = plusRotation },
                     tint = Ink,
                 )
             }
