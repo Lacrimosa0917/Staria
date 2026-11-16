@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.DiaryEntry
@@ -45,6 +46,12 @@ import com.lacrimosa.staria.ui.theme.SelectionShift
 
 /** 多选模式下标题整体左移的距离（为左侧选中框让位）。 */
 private val SelectShift = SelectionShift
+
+/** 长按高亮范围在左右两侧各外扩的量（避免白底紧贴文字）。 */
+private val HighlightPadX = 10.dp
+
+/** 长按高亮范围在上下各外扩的量（包住行内边距）。 */
+private val HighlightPadY = 4.dp
 
 /**
  * 一行标题。点击展开为卡片（README：点击该行展开为卡片展示）。
@@ -66,6 +73,9 @@ fun DiaryTitleRow(
 ) {
     val shift = if (selectionMode) SelectShift else 0.dp
 
+    // 组合期取出密度，供长按回调里把外扩量换算成像素
+    val density = LocalDensity.current
+
     // 本行在窗口里的左上角与尺寸，用于把手势坐标换算成窗口坐标，
     // 并给 tooltip 提供「保持原亮度」的矩形范围
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -79,17 +89,19 @@ fun DiaryTitleRow(
                     dampingRatio = Spring.DampingRatioNoBouncy,
                     stiffness = Spring.StiffnessMediumLow,
                 ),
-            ),
+            )
+            // 测量挂在整列上：展开正文时也一并算进高亮范围，
+            // 长按高亮才会包含正文卡片，而不只是标题那一行。
+            .onGloballyPositioned { coords ->
+                windowOrigin = coords.positionInWindow()
+                windowSize = coords.size
+            },
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = shift)
-                    .onGloballyPositioned { coords ->
-                        windowOrigin = coords.positionInWindow()
-                        windowSize = coords.size
-                    }
                     // 点击与长按必须放在**同一个** detectTapGestures 里：
                     // 拆成 combinedClickable + pointerInput 时，
                     // 内层 pointerInput 的 detectTapGestures 会先消费按下事件，
@@ -99,14 +111,23 @@ fun DiaryTitleRow(
                             onTap = { onClick() },
                             onLongPress = { local ->
                                 if (!selectionMode) {
+                                    // 高亮范围左右各外扩一点，避免白底紧贴文字；
+                                    // 纵向也略微外扩，包住行内边距。
+                                    val padX = with(density) { HighlightPadX.toPx() }
+                                    val padY = with(density) { HighlightPadY.toPx() }
                                     onLongPress(
-                                        windowOrigin + local,
+                                        // 长按点仍是手指位置，换算到窗口坐标
+                                        Offset(
+                                            windowOrigin.x + local.x,
+                                            windowOrigin.y + local.y,
+                                        ),
                                         Rect(
-                                            offset = windowOrigin,
-                                            size = Size(
-                                                windowSize.width.toFloat(),
-                                                windowSize.height.toFloat(),
-                                            ),
+                                            left = windowOrigin.x - padX,
+                                            top = windowOrigin.y - padY,
+                                            right = windowOrigin.x +
+                                                windowSize.width + padX,
+                                            bottom = windowOrigin.y +
+                                                windowSize.height + padY,
                                         ),
                                     )
                                 }

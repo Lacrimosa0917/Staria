@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -48,13 +49,15 @@ import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.ui.theme.CardRadius
 import com.lacrimosa.staria.ui.theme.Danger
 import com.lacrimosa.staria.ui.theme.Ink
+import com.lacrimosa.staria.ui.theme.LocalThemeColor
 import com.lacrimosa.staria.ui.theme.PageBackground
 import com.lacrimosa.staria.ui.theme.PopupRadius
 import com.lacrimosa.staria.ui.theme.Scrim
+import com.lacrimosa.staria.ui.theme.accent
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-private val TooltipWidth = 148.dp
+private val TooltipWidth = 132.dp
 private val TooltipItemHeight = 30.dp
 private val TooltipPadV = 4.dp
 private val TooltipMargin = 6.dp
@@ -277,7 +280,9 @@ private fun TooltipBody(
             }
         }
 
-        // 菜单面板：与全局背景同色的淡灰实心块，保证可读性
+        // 菜单面板：与全局背景同色的淡灰实心块，保证可读性；
+        // 外圈一道主题色描边提升辨识度（简约白主题下回落为墨色）。
+        val outline = LocalThemeColor.current.accent()
         Box(
             modifier = Modifier
                 .offset { IntOffset(pos.x.roundToInt(), pos.y.roundToInt()) }
@@ -288,6 +293,7 @@ private fun TooltipBody(
                     scaleY = scale
                 }
                 .background(surfaceColor, RoundedCornerShape(PopupRadius))
+                .border(1.dp, outline, RoundedCornerShape(PopupRadius))
                 .padding(vertical = TooltipPadV),
         ) {
             TooltipItems(actions = actions, requestClose = requestClose)
