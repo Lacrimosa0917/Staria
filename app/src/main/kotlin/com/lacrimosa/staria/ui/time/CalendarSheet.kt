@@ -48,7 +48,7 @@ private val WeekLabels = listOf("一", "二", "三", "四", "五", "六", "日")
 
 /**
  * 日历卡片：长按时间轴日期后唤起，选择日期跳转。
- * 左上角标题使用刻本宋体（README）。
+ * 左上角标题使用品牌宋体（README）。
  *
  * @param diaryDates 有日记的日期集合。有日记的日期以主题色圆形背景标记，
  *   且只有这些日期可以点击；无日记的日期不可交互。
@@ -91,7 +91,7 @@ fun CalendarSheet(
                 ) {}
                 .padding(horizontal = 18.dp, vertical = 18.dp),
         ) {
-                // ---- 标题：刻本宋体 ----
+                // ---- 标题：品牌宋体 ----
                 Text(
                     text = "选择日期",
                     fontFamily = KebenSong,

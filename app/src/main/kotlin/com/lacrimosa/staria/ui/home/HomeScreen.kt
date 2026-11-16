@@ -33,7 +33,7 @@ private val SloganToStack = 34.dp
  * 首页：极简留白布局。
  *
  * 纵向两段：
- * 1. slogan——刻本宋体大字号「星笺」
+ * 1. slogan——品牌宋体大字号「星笺」
  * 2. 卡片堆叠——纸条摘录
  *
  * ## 为什么用两个 weight 夹住

@@ -123,7 +123,7 @@ private fun EditKind.icon(): ImageVector = when (this) {
  * - 左上角退出按键；有未保存修改时弹窗询问是否保存
  * - 右上角圆形保存按钮，其左侧为同高胶囊，内含撤回与重做
  * - 按钮与胶囊悬浮在内容之上，滚动时标题与正文整体滚动
- * - 第一行左侧用刻本宋体显示当前类型
+ * - 第一行左侧用品牌宋体显示当前类型
  *   - 日记 / 随笔：该行右侧是标题输入
  *   - 摘录：显示 from，右侧是来源输入
  * - 长按类型文字弹出 tooltip，可切换类型
@@ -219,7 +219,7 @@ fun EditorScreen(
                     .padding(horizontal = BarSidePadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // 类型：刻本宋体，长按可切换
+                // 类型：品牌宋体，长按可切换
                 Text(
                     text = kind.label(),
                     modifier = Modifier
