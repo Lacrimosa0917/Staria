@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -40,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
@@ -57,7 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.EditDraft
 import com.lacrimosa.staria.data.EditKind
-import com.lacrimosa.staria.data.ThemeColor
 import com.lacrimosa.staria.ui.component.AnchorCorner
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.GlassCircleButton
@@ -505,14 +502,6 @@ private fun SaveButton(onClick: () -> Unit) {
 private val SavedCapsuleWidth = 96.dp
 
 /**
- * 主题色蒙层的最大不透明度。
- *
- * 不做成 1f（纯色块）：半透明既有主题色的辨识度，
- * 又能透出下面的玻璃与页面内容，观感更轻。
- */
-private const val SavedTintMaxAlpha = 0.55f
-
-/**
  * 左上角返回键：保存后向右拉伸成「已保存」胶囊。
  *
  * 收起态是原来的圆形返回键；[showSaved] 为 true 时：
@@ -549,16 +538,6 @@ private fun BackWithSavedNotice(
         label = "saved-text-alpha",
     )
 
-    // 主题色蒙层：展开时淡入、收起时淡出。
-    // 简约白（argb 为纯白）本身就是白纸底色，不加蒙层，否则会糊成一块色块。
-    val themeColor = LocalThemeColor.current
-    val tintColor = if (themeColor == ThemeColor.Plain) null else themeColor.accent()
-    val tintAlpha by animateFloatAsState(
-        targetValue = if (showSaved && tintColor != null) SavedTintMaxAlpha else 0f,
-        animationSpec = tween(durationMillis = 200),
-        label = "saved-tint-alpha",
-    )
-
     GlassPanel(
         backdrop = LocalGlassBackdrop.current,
         // 圆角恒为高度的一半：圆形时是正圆，拉宽后自然成为胶囊
@@ -574,16 +553,6 @@ private fun BackWithSavedNotice(
                 onClick = if (showSaved) onCollapseNotice else onExit,
             ),
     ) {
-        // 主题色蒙层：压在玻璃之上、内容之下
-        if (tintColor != null && tintAlpha > 0.01f) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(SecondaryButtonSize / 2))
-                    .background(tintColor.copy(alpha = tintAlpha)),
-            )
-        }
-
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             // 返回图标
             Box(

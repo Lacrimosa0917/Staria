@@ -1,35 +1,49 @@
-# ---------- Android / Gradle ----------
+# ---------- 构建产物 ----------
 .gradle/
 .kotlin/
 build/
 */build/
-captures/
-.externalNativeBuild/
-.cxx/
+
+# ---------- 本地配置与签名（绝不入库） ----------
 local.properties
-*.iml
+keystore.properties
+keystore/
+*.jks
+*.keystore
+*.pem
+*.der
+
+# ---------- 打包产物 ----------
 *.apk
 *.aab
-*.hprof
-
-# 签名材料一律不入库
-*.keystore
-*.jks
-keystore.properties
 
 # ---------- IDE ----------
 .idea/
-.vscode/
+*.iml
+
+# ---------- 编辑器/临时备份 ----------
+*.bak
+*.orig
+*~
+*.tmp
+*.swp
+
+# ---------- 调试产物 ----------
+# 调试截图 / 录屏 / uiautomator dump
+docs/glass/
+docs/baseline/
+docs/after/
+*.mp4
+_tmpaar/
+
+# 字体子集化脚本的临时字符表
+tools/_charset.txt
+
+# ---------- 崩溃与性能分析 ----------
+*.hprof
 
 # ---------- OS ----------
 Thumbs.db
 desktop.ini
 .DS_Store
 *.log
-
-# ---------- 调试产物（截图 / 录屏 / UI dump 不入库） ----------
-docs/glass/
-docs/baseline/
-docs/after/
-*.mp4
-_tmpaar/
