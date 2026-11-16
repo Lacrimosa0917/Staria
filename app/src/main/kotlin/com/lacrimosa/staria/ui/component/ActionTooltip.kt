@@ -296,6 +296,16 @@ private fun TooltipBody(
                 .border(1.dp, outline, RoundedCornerShape(PopupRadius))
                 .padding(vertical = TooltipPadV),
         ) {
+            // 吞掉落在面板空白处的点击：否则会穿透到下层卡片（点开正文卡片）。
+            // 声明在 TooltipItems 之前，层级更低，不挡菜单项自己的点击。
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {},
+            )
             TooltipItems(actions = actions, requestClose = requestClose)
         }
     }

@@ -242,12 +242,14 @@ fun StariaApp(
     }
 
     // 系统返回键的优先级：
-    // 星尘/设置 → 编辑页 → 随笔查看页 → 关展开卡片 → 退多选 → 交给系统
+    // 个人主页抽屉 → 星尘/设置 → 编辑页 → 随笔查看页 → 关展开卡片 → 退多选 → 交给系统
     BackHandler(
-        enabled = showTrash || showSettings || editDraft != null || readerEssay != null ||
-            expandedNote != null || selection.isActive,
+        enabled = profileVisible || showTrash || showSettings || editDraft != null ||
+            readerEssay != null || expandedNote != null || selection.isActive,
     ) {
         when {
+            // 抽屉打开时先收起抽屉，回到主页，而不是直接退出应用
+            profileVisible -> profileVisible = false
             showTrash -> showTrash = false
             showSettings -> showSettings = false
             // 编辑页有自己的未保存拦截，这里只做兜底：直接丢弃草稿

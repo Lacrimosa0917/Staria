@@ -1,9 +1,13 @@
 package com.lacrimosa.staria.ui.component
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -169,18 +173,29 @@ fun StariaBottomBar(
             barWidth = barWidth,
         )
 
-        if (deleteAction != null) {
-            DeleteButton(
-                modifier = Modifier.align(Alignment.BottomEnd),
-                onClick = deleteAction,
-            )
-        } else {
+        // 新建按钮 ↔ 红色删除按钮：交叉淡入淡出，避免硬切
+        AnimatedVisibility(
+            visible = deleteAction == null,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.BottomEnd),
+        ) {
             CreateButton(
-                modifier = Modifier.align(Alignment.BottomEnd),
                 expanded = createExpanded,
                 onExpandedChange = onCreateExpandedChange,
                 onCreate = onCreate,
             )
+        }
+
+        AnimatedVisibility(
+            visible = deleteAction != null,
+            enter = fadeIn(tween(180)),
+            exit = fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.BottomEnd),
+        ) {
+            if (deleteAction != null) {
+                DeleteButton(onClick = deleteAction)
+            }
         }
     }
 }

@@ -1,8 +1,13 @@
 package com.lacrimosa.staria.ui.time
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,12 +89,8 @@ fun DiaryTitleRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow,
-                ),
-            )
+            // 高度动画交给下方展开卡片的 AnimatedVisibility，
+            // 这里不再叠加 animateContentSize（否则两套高度动画会互相拖慢）。
             // 测量挂在整列上：展开正文时也一并算进高亮范围，
             // 长按高亮才会包含正文卡片，而不只是标题那一行。
             .onGloballyPositioned { coords ->
@@ -176,12 +177,26 @@ fun DiaryTitleRow(
         }
 
         // ---------- 展开卡片 ----------
-        // 多选时不展开，避免与选择操作抢空间
-        if (expanded && !selectionMode) {
+        // 多选时不展开，避免与选择操作抢空间。
+        // 用 AnimatedVisibility 同时做高度展开与淡入淡出：
+        // 单纯靠外层 animateContentSize 只会有高度变化，卡片是硬出现的。
+        AnimatedVisibility(
+            visible = expanded && !selectionMode,
+            enter = expandVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+                expandFrom = Alignment.Top,
+            ) + fadeIn(animationSpec = tween(200)),
+            exit = shrinkVertically(
+                animationSpec = tween(180),
+                shrinkTowards = Alignment.Top,
+            ) + fadeOut(animationSpec = tween(150)),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = shift)
                     .padding(bottom = 10.dp)
                     // 纯白卡面，不描边：与 #F5F5F5 底色的层次只靠色差
                     .background(PaperWhite, RoundedCornerShape(CardRadius))

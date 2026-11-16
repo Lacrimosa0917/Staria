@@ -1,5 +1,15 @@
 package com.lacrimosa.staria.ui.paper
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -222,8 +232,6 @@ private fun PaperNoteCard(
     /** 参数：长按点的窗口坐标、本卡片的窗口矩形（供 tooltip 挖洞保持亮度）。 */
     onLongPress: (Offset, Rect) -> Unit,
 ) {
-    val shift = if (selectionMode) SelectShift else 0.dp
-
     // 卡片在窗口里的左上角与尺寸，用来把手势坐标换算成窗口坐标，
     // 并给 tooltip 提供「保持原亮度」的矩形范围
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -262,6 +270,17 @@ private fun PaperNoteCard(
             }
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
+        // 进入 / 退出多选时，日期行平滑右移 / 移回（只有第一行移动，
+        // 正文与出处保持原位，避免整块内容跟着抖）
+        val dateShift by animateDpAsState(
+            targetValue = if (selectionMode) SelectShift else 0.dp,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+            label = "paper-date-shift",
+        )
+
         Column(modifier = Modifier.fillMaxWidth()) {
             // ---------- 第一行：日期 ----------
             // 直接放 Text，不再套一层 Row：Row 的垂直居中对齐会让 11sp 的日期
@@ -269,7 +288,7 @@ private fun PaperNoteCard(
             // lineHeight 压到 14sp，日期行整体从 ~16dp 收到 ~14dp。
             Text(
                 text = note.editedOn.format(DateFormatter),
-                modifier = Modifier.padding(start = shift),
+                modifier = Modifier.padding(start = dateShift),
                 color = InkMuted,
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
@@ -280,7 +299,6 @@ private fun PaperNoteCard(
             // ---------- 正文 ----------
             Text(
                 text = note.text,
-                modifier = Modifier.padding(start = shift),
                 color = Ink,
                 fontSize = 15.sp,
                 lineHeight = 26.sp,
@@ -306,11 +324,15 @@ private fun PaperNoteCard(
             }
         }
 
-        // ---------- 选中框：多选时出现在最左侧 ----------
-        if (selectionMode) {
+        // ---------- 选中框：多选时出现在最左侧（淡入淡出 + 轻微缩放） ----------
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(tween(160)) + scaleIn(tween(160), initialScale = 0.8f),
+            exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.8f),
+            modifier = Modifier.align(Alignment.TopStart),
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
                     .size(SelectionBoxSize)
                     .then(
                         if (selected) {

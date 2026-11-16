@@ -81,17 +81,26 @@ internal fun parseMarkdown(text: String): MarkdownResult {
         out.append(line, markerLength, line.length)
         val visibleEnd = out.length
 
-        // 只有标记没有内容的空标题行不加样式，避免产生零长度区间
-        if (level > 0 && visibleEnd > visibleStart) {
-            spans += AnnotatedString.Range(headingSpan(level), visibleStart, visibleEnd)
+        // 行尾换行符算在这一行里：段落样式必须覆盖到它，
+        // 否则空标题行（只有 "# "、可见内容为空）拿不到行高，
+        // 光标会被画到按默认行高计算的位置 —— 看起来就是「跑到下一行」。
+        val hasNewline = newline >= 0
+        val paraEnd = if (hasNewline) visibleEnd + 1 else visibleEnd
+
+        if (level > 0) {
+            // 字号只作用于可见字符，避免影响行尾
+            if (visibleEnd > visibleStart) {
+                spans += AnnotatedString.Range(headingSpan(level), visibleStart, visibleEnd)
+            }
+            // 行高作用于整行（含换行符），空标题行也生效
             paragraphs += AnnotatedString.Range(
                 ParagraphStyle(lineHeight = headingLineHeight(level), textAlign = TextAlign.Start),
                 visibleStart,
-                visibleEnd,
+                paraEnd,
             )
         }
 
-        if (newline < 0) break
+        if (!hasNewline) break
         out.append('\n')
         lineStart = newline + 1
     }
@@ -136,6 +145,9 @@ private class MarkerOffsetMapping(
             val collapsedAt = range.first - removed
             when {
                 transformed < collapsedAt -> return (transformed + removed).coerceIn(0, originalLength)
+                // 折叠点：映射到标记之后（行首可见内容的起点）。
+                // 这里必须钳在 originalLength 内，否则空标题行会落到换行符之后，
+                // 光标就画到下一行去了。
                 transformed == collapsedAt -> return (range.last + 1).coerceIn(0, originalLength)
                 else -> removed += length
             }

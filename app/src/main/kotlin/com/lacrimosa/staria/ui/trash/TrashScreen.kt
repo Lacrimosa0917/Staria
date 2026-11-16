@@ -1,6 +1,14 @@
 package com.lacrimosa.staria.ui.trash
 
+import androidx.activity.compose.BackHandler
+
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -146,6 +154,18 @@ fun TrashScreen(
         selected.clear()
     }
 
+    // 系统返回键：多选时只退出多选，不关闭星尘页。
+    // 注册在页面内，优先级高于根布局那个「关星尘」的处理器。
+    // 确认弹窗、tooltip 一并先收掉，避免留下浮层。
+    BackHandler(enabled = selectionMode || pendingRestore || pendingDelete || tooltipItem != null) {
+        when {
+            pendingRestore -> pendingRestore = false
+            pendingDelete -> pendingDelete = false
+            tooltipItem != null -> tooltipItem = null
+            selectionMode -> exitSelection()
+        }
+    }
+
     // PageGlassLayer：本页自己录一份 backdrop，让顶栏圆钮透出的是本页内容，
     // 而不是根布局那层（那只录了四个 tab 的内容）。
     // content 会被录进 backdrop；chrome 里的玻璃控件不录制（否则画自己、栈溢出）。
@@ -221,11 +241,15 @@ fun TrashScreen(
             )
         }
 
-        // ---------- 多选态底部：左恢复 / 右删除 ----------
-        if (selectionMode) {
+        // ---------- 多选态底部：左恢复 / 右删除（淡入淡出） ----------
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(tween(180)) + slideInVertically(tween(180)) { it / 3 },
+            exit = fadeOut(tween(180)) + slideOutVertically(tween(180)) { it / 3 },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .fillMaxWidth()
                     .padding(horizontal = BarSidePadding, vertical = 18.dp),

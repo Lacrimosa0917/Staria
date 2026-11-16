@@ -1,5 +1,15 @@
 package com.lacrimosa.staria.ui.think
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -211,7 +221,6 @@ private fun EssayCard(
     /** 参数：长按点的窗口坐标、本卡片的窗口矩形（供 tooltip 挖洞保持亮度）。 */
     onLongPress: (Offset, Rect) -> Unit,
 ) {
-    val shift = if (selectionMode) SelectShift else 0.dp
     var windowOrigin by remember { mutableStateOf(Offset.Zero) }
     var windowSize by remember { mutableStateOf(IntSize.Zero) }
 
@@ -247,13 +256,24 @@ private fun EssayCard(
             }
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
+        // 进入 / 退出多选时，只有第一行日期平滑右移 / 移回，
+        // 标题与正文保持原位
+        val dateShift by animateDpAsState(
+            targetValue = if (selectionMode) SelectShift else 0.dp,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+            label = "think-date-shift",
+        )
+
         Column(modifier = Modifier.fillMaxWidth()) {
             // ---------- 第一行：日期 ----------
             // lineHeight 压到 14sp：11sp 文字吃默认行高会让这一行偏胖，
             // 与下方标题之间的间隙也跟着变大。
             Text(
                 text = essay.date.format(DateFormatter),
-                modifier = Modifier.padding(start = shift),
+                modifier = Modifier.padding(start = dateShift),
                 color = InkMuted,
                 fontSize = 11.sp,
                 lineHeight = 14.sp,
@@ -264,7 +284,6 @@ private fun EssayCard(
             // ---------- 第二行：标题（更高字号与字重）----------
             Text(
                 text = essay.title,
-                modifier = Modifier.padding(start = shift),
                 color = Ink,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Medium,
@@ -278,7 +297,6 @@ private fun EssayCard(
             // ---------- 第三行：正文预览 ----------
             Text(
                 text = essay.body,
-                modifier = Modifier.padding(start = shift),
                 color = InkMuted,
                 fontSize = 13.sp,
                 lineHeight = 21.sp,
@@ -287,11 +305,15 @@ private fun EssayCard(
             )
         }
 
-        // 选中框：多选时出现在最左侧
-        if (selectionMode) {
+        // 选中框：多选时出现在最左侧（淡入淡出 + 轻微缩放）
+        AnimatedVisibility(
+            visible = selectionMode,
+            enter = fadeIn(tween(160)) + scaleIn(tween(160), initialScale = 0.8f),
+            exit = fadeOut(tween(160)) + scaleOut(tween(160), targetScale = 0.8f),
+            modifier = Modifier.align(Alignment.TopStart),
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
                     .size(SelectionBoxSize)
                     .then(
                         if (selected) {

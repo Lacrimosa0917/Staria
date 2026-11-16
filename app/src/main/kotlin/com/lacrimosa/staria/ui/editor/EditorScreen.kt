@@ -1,5 +1,11 @@
 package com.lacrimosa.staria.ui.editor
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,12 +32,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
@@ -43,13 +52,16 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lacrimosa.staria.data.EditDraft
 import com.lacrimosa.staria.data.EditKind
+import com.lacrimosa.staria.data.ThemeColor
 import com.lacrimosa.staria.ui.component.AnchorCorner
 import com.lacrimosa.staria.ui.component.BarSidePadding
 import com.lacrimosa.staria.ui.component.GlassCircleButton
+import com.lacrimosa.staria.ui.component.GlassPanel
 import com.lacrimosa.staria.ui.component.GlassPill
 import com.lacrimosa.staria.ui.component.GlassPillIcon
 import com.lacrimosa.staria.ui.component.PageGlassLayer
@@ -71,10 +83,12 @@ import com.lacrimosa.staria.ui.theme.Ink
 import com.lacrimosa.staria.ui.theme.InkMuted
 import com.lacrimosa.staria.ui.theme.KebenSong
 import com.lacrimosa.staria.ui.theme.LocalThemeColor
+import com.lacrimosa.staria.ui.theme.LocalGlassBackdrop
 import com.lacrimosa.staria.ui.theme.PaperWhite
 import com.lacrimosa.staria.ui.theme.Scrim
 import com.lacrimosa.staria.ui.theme.SecondaryButtonSize
 import com.lacrimosa.staria.ui.theme.accent
+import kotlinx.coroutines.delay
 
 /** 圆形按键直径。保存 / 退出都用它，与查看页保持一致。 */
 private val ButtonSize = SecondaryButtonSize
@@ -134,6 +148,11 @@ fun EditorScreen(
     var showKindTooltip by remember { mutableStateOf(false) }
     var kindAnchor by remember { mutableStateOf(Offset.Zero) }
 
+    // 保存反馈：左上角返回键短暂变宽成「已保存」胶囊。
+    // savedNoticeTick 递增用于重置 2 秒计时（连续保存会重新计时）。
+    var savedNoticeTick by remember { mutableStateOf(0) }
+    var showSavedNotice by remember { mutableStateOf(false) }
+
     // 当前条目 id。新建时为空，保存后由 onSave 返回的真实 id 更新。
     // 用独立 state 而不是改 initial，避免 remember(initial) 重建编辑器、
     // 清空输入与光标。
@@ -161,6 +180,17 @@ fun EditorScreen(
     fun doSave() {
         currentId = onSave(buildDraft())
         history.markSaved()
+        // 触发左上角「已保存」反馈，并重置 2 秒计时
+        showSavedNotice = true
+        savedNoticeTick++
+    }
+
+    // 2 秒后自动收起「已保存」胶囊（期间点击返回键会提前收起）
+    LaunchedEffect(savedNoticeTick) {
+        if (savedNoticeTick > 0) {
+            delay(2000)
+            showSavedNotice = false
+        }
     }
 
     // 系统返回键也走「未保存」拦截，行为与左上角退出键一致。
@@ -281,17 +311,18 @@ fun EditorScreen(
         }
         },
         chrome = {
-        // ---------- 左上角：退出 ----------
+        // ---------- 左上角：退出 / 已保存反馈 ----------
+        // 保存后短暂向右拉伸成「已保存」胶囊；期间点击只收起胶囊，不退出。
         Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
                 .padding(start = BarSidePadding, top = 14.dp),
         ) {
-            GlassCircleButton(
-                icon = IconClose,
-                description = "退出",
-                onClick = { requestExit() },
+            BackWithSavedNotice(
+                showSaved = showSavedNotice,
+                onExit = { requestExit() },
+                onCollapseNotice = { showSavedNotice = false },
             )
         }
 
@@ -468,6 +499,116 @@ private fun SaveButton(onClick: () -> Unit) {
         filled = true,
         fillColor = LocalThemeColor.current.accent(),
     )
+}
+
+/** 「已保存」胶囊展开后的宽度。 */
+private val SavedCapsuleWidth = 96.dp
+
+/**
+ * 左上角返回键：保存后向右拉伸成「已保存」胶囊。
+ *
+ * 收起态是原来的圆形返回键；[showSaved] 为 true 时：
+ * - 图标淡出，文字「已保存」淡入
+ * - 面板宽度用带过冲的弹簧向右拉伸（圆角由圆转胶囊）
+ * 文字显示期间点击只收起胶囊（[onCollapseNotice]），不触发退出。
+ */
+@Composable
+private fun BackWithSavedNotice(
+    showSaved: Boolean,
+    onExit: () -> Unit,
+    onCollapseNotice: () -> Unit,
+) {
+    val morphSpec: SpringSpec<Dp> = spring(
+        dampingRatio = 0.55f,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+
+    val width by animateDpAsState(
+        targetValue = if (showSaved) SavedCapsuleWidth else SecondaryButtonSize,
+        animationSpec = morphSpec,
+        label = "saved-capsule-width",
+    )
+
+    // 图标淡出 / 文字淡入
+    val iconAlpha by animateFloatAsState(
+        targetValue = if (showSaved) 0f else 1f,
+        animationSpec = tween(durationMillis = 160),
+        label = "saved-icon-alpha",
+    )
+    val textAlpha by animateFloatAsState(
+        targetValue = if (showSaved) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "saved-text-alpha",
+    )
+
+    // 主题色蒙层：展开时淡入、收起时淡出。
+    // 简约白（argb 为纯白）本身就是白纸底色，不加蒙层，否则会糊成一块色块。
+    val themeColor = LocalThemeColor.current
+    val tintColor = if (themeColor == ThemeColor.Plain) null else themeColor.accent()
+    val tintAlpha by animateFloatAsState(
+        targetValue = if (showSaved && tintColor != null) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "saved-tint-alpha",
+    )
+
+    GlassPanel(
+        backdrop = LocalGlassBackdrop.current,
+        // 圆角恒为高度的一半：圆形时是正圆，拉宽后自然成为胶囊
+        shape = RoundedCornerShape(SecondaryButtonSize / 2),
+        refractionScale = 0.6f,
+        edgeHighlight = 1.dp,
+        modifier = Modifier
+            .height(SecondaryButtonSize)
+            .width(width)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = if (showSaved) onCollapseNotice else onExit,
+            ),
+    ) {
+        // 主题色蒙层：压在玻璃之上、内容之下
+        if (tintColor != null && tintAlpha > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(SecondaryButtonSize / 2))
+                    .background(tintColor.copy(alpha = tintAlpha)),
+            )
+        }
+
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // 返回图标
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(iconAlpha),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = IconClose,
+                    contentDescription = "退出",
+                    modifier = Modifier.size(17.dp),
+                    tint = Ink,
+                )
+            }
+            // 「已保存」文字
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(textAlpha),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "已保存",
+                    // 有主题色蒙层时用白字，保证在彩色底上可读；
+                    // 简约白没有蒙层，仍用墨色。
+                    color = if (tintColor != null) PaperWhite else Ink,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
 }
 
 /** 未保存时的询问弹窗。 */
