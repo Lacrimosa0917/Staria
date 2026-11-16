@@ -26,3 +26,10 @@ Thumbs.db
 desktop.ini
 .DS_Store
 *.log
+
+# ---------- 调试产物（截图 / 录屏 / UI dump 不入库） ----------
+docs/glass/
+docs/baseline/
+docs/after/
+*.mp4
+_tmpaar/
