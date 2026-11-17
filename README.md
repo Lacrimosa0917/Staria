@@ -6,7 +6,7 @@
 
 本软件持续更新，如果你觉得好用，或者期待新的功能，可以点一个star。
 
-![version](https://img.shields.io/badge/version-1.0.0-green) ![License](https://img.shields.io/badge/License-GPL_v3-orange) ![made_with](https://img.shields.io/badge/made_with-DeepSeek-blue) 
+![version](https://img.shields.io/badge/version-1.0.1-green) ![License](https://img.shields.io/badge/License-GPL_v3-orange) ![made_with](https://img.shields.io/badge/made_with-DeepSeek-blue) 
 
 ---
 
