@@ -16,9 +16,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -46,6 +49,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -98,6 +102,21 @@ private val CapsuleCellWidth = 36.dp
 
 /** 日期格式：与查看页统一。 */
 private val DateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/M/d")
+
+/** 键盘收起时，正文末尾的固定留白。 */
+private val MinTailSpace = 120.dp
+
+/**
+ * 键盘弹出时，正文末尾的留白。
+ *
+ * 这个留白的意义是：让最后一行文字能被滑到屏幕上半屏，
+ * 而不是贴着键盘顶边——贴着边输入时看不到下一行会很难受。
+ *
+ * 取固定 400dp（而不是按屏幕比例）：
+ * 留白长度直接标定「最后一行最多能往上滚多少」，
+ * 400dp 足以把收尾行推到可视区中线以上，在各种屏高上都稳定。
+ */
+private val ImeTailSpace = 400.dp
 
 /** 类型标签对应的展示文本。 */
 private fun EditKind.label(): String = when (this) {
@@ -157,6 +176,10 @@ fun EditorScreen(
 
     val bodyScroll = rememberScrollState()
 
+    // 键盘是否弹出：决定正文末尾留白用大值还是小值。
+    // 放在 Composable 作用域取值，才能在 Spacer 里按状态切换。
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
     // 修改过的判定：初始快照之外还有别的记录，或内容与初始不同
     val dirty = history.isDirty()
 
@@ -200,10 +223,16 @@ fun EditorScreen(
     PageGlassLayer(
         modifier = modifier,
         content = {
-        // ---------- 内容层 ----------
+        // imePadding：键盘弹出时把滚动视口缩到键盘之上。
+        // 少了这一条，enableEdgeToEdge 下窗口不会为键盘让位，
+        // 滚动区仍按整屏算高度，末尾几行永远藏在键盘后面且滚不到。
+        //
+        // 末尾留白要判断键盘是否弹出：弹出时用固定的 ImeTailSpace，
+        // 让最后一行能一路滚到上半屏；收起时回到小留白，避免大片空白。
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .verticalScroll(bodyScroll)
                 .statusBarsPadding()
                 // 顶栏是悬浮的，内容顶部让出它的高度
@@ -303,8 +332,9 @@ fun EditorScreen(
                 onValueChange = { history.editBody(it) },
             )
 
-            // 底部留白：滚到底时正文停在键盘/导航之上
-            Spacer(Modifier.height(120.dp))
+            // 底部留白：键盘弹出时用大留白，让最后一行能滚到上半屏；
+            // 收起时回落到小留白，避免页尾一大片空。
+            Spacer(Modifier.height(if (imeVisible) ImeTailSpace else MinTailSpace))
         }
         },
         chrome = {
