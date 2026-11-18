@@ -1,5 +1,6 @@
 package com.lacrimosa.staria.ui.editor
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateDpAsState
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -118,6 +118,17 @@ private val MinTailSpace = 120.dp
  */
 private val ImeTailSpace = 200.dp
 
+/**
+ * 末尾留白在「键盘弹起 / 收起」之间切换的动画时长。
+ *
+ * 为什么要动留白而不是动滚动值：
+ * 键盘收起时可视区突然变高，scroll range 缩小，ScrollState 会**立刻**
+ * 被夹到新的最大值 —— 内容瞬间跳回底部，看起来很生硬。
+ * 留白本身参与 scroll range 的计算，让它逐帧收缩，
+ * 滚动位置随笔跟随，就成了自然的回落。
+ */
+private const val TailSpaceAnimMs = 280
+
 /** 类型标签对应的展示文本。 */
 private fun EditKind.label(): String = when (this) {
     EditKind.Diary -> "日记"
@@ -176,9 +187,26 @@ fun EditorScreen(
 
     val bodyScroll = rememberScrollState()
 
-    // 键盘是否弹出：决定正文末尾留白用大值还是小值。
-    // 放在 Composable 作用域取值，才能在 Spacer 里按状态切换。
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    // 键盘高度（dp）。用 animateDpAsState 平滑过渡，而不是直接 imePadding()：
+    // imePadding 在键盘收起的那一帧就把视口撑高，scroll range 骤减，
+    // ScrollState 会被立刻夹到新的最大值，内容瞬间跳回底部。
+    // 让「键盘让位」本身逐帧收放，视口高度和 scroll range 都平滑变化，
+    // 滚动位置随之跟随，回落才是自然的。
+    val density = LocalDensity.current
+    val imeHeightPx = WindowInsets.ime.getBottom(density)
+    val imeVisible = imeHeightPx > 0
+    val imeBottomDp by animateDpAsState(
+        targetValue = with(density) { imeHeightPx.toDp() },
+        animationSpec = tween(durationMillis = TailSpaceAnimMs, easing = FastOutSlowInEasing),
+        label = "editor-ime-bottom",
+    )
+
+    // 末尾留白同样做成动画值：与视口收放同步，进一步平滑 scroll range。
+    val tailSpace by animateDpAsState(
+        targetValue = if (imeVisible) ImeTailSpace else MinTailSpace,
+        animationSpec = tween(durationMillis = TailSpaceAnimMs, easing = FastOutSlowInEasing),
+        label = "editor-tail-space",
+    )
 
     // 修改过的判定：初始快照之外还有别的记录，或内容与初始不同
     val dirty = history.isDirty()
@@ -223,16 +251,14 @@ fun EditorScreen(
     PageGlassLayer(
         modifier = modifier,
         content = {
-        // imePadding：键盘弹出时把滚动视口缩到键盘之上。
-        // 少了这一条，enableEdgeToEdge 下窗口不会为键盘让位，
-        // 滚动区仍按整屏算高度，末尾几行永远藏在键盘后面且滚不到。
-        //
-        // 末尾留白要判断键盘是否弹出：弹出时用固定的 ImeTailSpace，
-        // 让最后一行能一路滚到上半屏；收起时回到小留白，避免大片空白。
+        // imePadding 换成动画值：键盘收起时视口平滑撑高，配合 tailSpace
+        // 一起收缩，滚动位置自然回落。
+        // 少了这一层的让位，enableEdgeToEdge 下滚动区仍按整屏算高度，
+        // 末尾几行会藏在键盘后面且滚不到。
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .imePadding()
+                .padding(bottom = imeBottomDp)
                 .verticalScroll(bodyScroll)
                 .statusBarsPadding()
                 // 顶栏是悬浮的，内容顶部让出它的高度
@@ -333,8 +359,8 @@ fun EditorScreen(
             )
 
             // 底部留白：键盘弹出时用大留白，让最后一行能滚到上半屏；
-            // 收起时回落到小留白，避免页尾一大片空。
-            Spacer(Modifier.height(if (imeVisible) ImeTailSpace else MinTailSpace))
+            // 收起时回落到小留白。值本身是动画的，所以回落是平滑的。
+            Spacer(Modifier.height(tailSpace))
         }
         },
         chrome = {
