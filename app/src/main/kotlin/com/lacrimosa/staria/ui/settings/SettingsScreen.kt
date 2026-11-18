@@ -1,5 +1,6 @@
 package com.lacrimosa.staria.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateDpAsState
@@ -103,6 +104,13 @@ fun SettingsScreen(
     var showDarkTooltip by remember { mutableStateOf(false) }
     // 胶囊在 content 层里的占位坐标（窗口坐标），chrome 层的真实胶囊据此定位
     var darkCapsulePos by remember { mutableStateOf(Offset.Zero) }
+
+    // 系统返回键：深色模式面板展开时只收起面板，不关设置页。
+    // 注册在页面内，优先级高于根布局那个「关设置页」的处理器
+    // （与星尘页处理多选/弹窗的方式一致）。
+    BackHandler(enabled = showDarkTooltip) {
+        showDarkTooltip = false
+    }
 
     // PageGlassLayer：本页自己录一份 backdrop，让返回圆钮透出的是本页内容，
     // 而不是根布局那层（那只录了四个 tab 的内容）。

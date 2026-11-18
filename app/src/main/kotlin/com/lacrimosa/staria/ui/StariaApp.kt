@@ -248,15 +248,22 @@ fun StariaApp(
         selection.setOverlay(false)
     }
 
-    // 系统返回键的优先级：
-    // 个人主页抽屉 → 星尘/设置 → 编辑页 → 随笔查看页 → 关展开卡片 → 退多选 → 交给系统
+    // 系统返回键的优先级：**从上层覆盖面往下收**。
+    //
+    // 顺序必须按「层」排，不能按「谁先被打开」排：
+    // 星尘 / 设置页是从个人主页抽屉点进去的，抽屉还留在下面。
+    // 如果先把 profileVisible 判掉，按返回就会先收起抽屉，
+    // 而当前可见的星尘 / 设置页毫无反应——这正是曾经的 bug。
+    //
+    // 正确顺序：覆盖在最上面的先关，逐层往下。
+    // 星尘/设置 → 编辑页 → 随笔查看页 → 关展开卡片 → 抽屉 → 退多选 → 交给系统
     BackHandler(
-        enabled = profileVisible || showTrash || showSettings || editDraft != null ||
-            readerEssayId != null || expandedNoteId != null || selection.isActive,
+        enabled = showTrash || showSettings || editDraft != null ||
+            readerEssayId != null || expandedNoteId != null ||
+            profileVisible || selection.isActive,
     ) {
         when {
-            // 抽屉打开时先收起抽屉，回到主页，而不是直接退出应用
-            profileVisible -> profileVisible = false
+            // 二级页压在最上层，先关它
             showTrash -> showTrash = false
             showSettings -> showSettings = false
             // 编辑页有自己的未保存拦截，这里只做兜底：直接丢弃草稿
@@ -266,6 +273,8 @@ fun StariaApp(
                 expandedNoteId = null
                 selection.setOverlay(false)
             }
+            // 抽屉在最下层，最后收
+            profileVisible -> profileVisible = false
             selection.isActive -> selection.exit()
         }
     }
