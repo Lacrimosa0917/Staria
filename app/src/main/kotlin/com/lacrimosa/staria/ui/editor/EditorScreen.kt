@@ -112,11 +112,11 @@ private val MinTailSpace = 120.dp
  * 这个留白的意义是：让最后一行文字能被滑到屏幕上半屏，
  * 而不是贴着键盘顶边——贴着边输入时看不到下一行会很难受。
  *
- * 取固定 400dp（而不是按屏幕比例）：
+ * 取固定 200dp（而不是按屏幕比例）：
  * 留白长度直接标定「最后一行最多能往上滚多少」，
- * 400dp 足以把收尾行推到可视区中线以上，在各种屏高上都稳定。
+ * 200dp 已足够把收尾行推出键盘遮挡区并留出呼吸空间。
  */
-private val ImeTailSpace = 400.dp
+private val ImeTailSpace = 200.dp
 
 /** 类型标签对应的展示文本。 */
 private fun EditKind.label(): String = when (this) {

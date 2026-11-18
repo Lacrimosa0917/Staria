@@ -185,16 +185,23 @@ fun StariaApp(
     var profileVisible by remember { mutableStateOf(false) }
     var editingNickname by remember { mutableStateOf(false) }
 
-    // 纸条展开浮层：放在根布局渲染，才能压暗并覆盖顶栏与底栏
-    var expandedNote by remember { mutableStateOf<PaperNote?>(null) }
+    // 纸条展开浮层：在根布局渲染，才能压暗并覆盖顶栏与底栏。
+    //
+    // 与随笔查看页同理：只存 id，不存 PaperNote 对象。
+    // 存对象会拿住打开那一刻的快照，编辑保存后浮层仍显示旧内容。
+    var expandedNoteId by remember { mutableStateOf<Long?>(null) }
 
     // 日历浮层：同样放根布局最外层渲染，遮罩才能覆盖顶栏与底栏。
     // calendarPick 用于把选中的日期回传给时间页展开对应日记组。
     var showCalendar by remember { mutableStateOf(false) }
     var calendarPick by remember { mutableStateOf<LocalDate?>(null) }
 
-    // 随笔查看页（二级全屏页面）。非空时整页覆盖，底栏与头像不出现
-    var readerEssay by remember { mutableStateOf<Essay?>(null) }
+    // 随笔查看页（二级全屏页面）。非空时整页覆盖，底栏与头像不出现。
+    //
+    // 只存 **id**，不存 Essay 对象：存对象等于存下当时的快照，
+    // 保存修改后列表已更新，查看页却还拿着旧对象，要切页面才刷新。
+    // 存 id 则每次重组都从 essays 里现取，自动跟随最新内容。
+    var readerEssayId by remember { mutableStateOf<Long?>(null) }
 
     // 编辑页（二级全屏）。非空时覆盖一切，底栏、头像、抽屉都不出现。
     // 新建与编辑共用：草稿里的 id 为空即新建。
@@ -237,7 +244,7 @@ fun StariaApp(
     // 切 tab 时退出多选：否则回到原页会残留选中态
     LaunchedEffect(currentTab) {
         selection.exit()
-        expandedNote = null
+        expandedNoteId = null
         selection.setOverlay(false)
     }
 
@@ -245,7 +252,7 @@ fun StariaApp(
     // 个人主页抽屉 → 星尘/设置 → 编辑页 → 随笔查看页 → 关展开卡片 → 退多选 → 交给系统
     BackHandler(
         enabled = profileVisible || showTrash || showSettings || editDraft != null ||
-            readerEssay != null || expandedNote != null || selection.isActive,
+            readerEssayId != null || expandedNoteId != null || selection.isActive,
     ) {
         when {
             // 抽屉打开时先收起抽屉，回到主页，而不是直接退出应用
@@ -254,9 +261,9 @@ fun StariaApp(
             showSettings -> showSettings = false
             // 编辑页有自己的未保存拦截，这里只做兜底：直接丢弃草稿
             editDraft != null -> editDraft = null
-            readerEssay != null -> readerEssay = null
-            expandedNote != null -> {
-                expandedNote = null
+            readerEssayId != null -> readerEssayId = null
+            expandedNoteId != null -> {
+                expandedNoteId = null
                 selection.setOverlay(false)
             }
             selection.isActive -> selection.exit()
@@ -555,7 +562,7 @@ fun StariaApp(
                                 paperNotes = paperNotes.filterNot { it.id == note.id }
                             },
                             onExpand = { note ->
-                                expandedNote = note
+                                expandedNoteId = note.id
                                 selection.setOverlay(true)
                             },
                         )
@@ -577,7 +584,7 @@ fun StariaApp(
                                 trash = trash + essay.toTrash()
                                 essays = essays.filterNot { it.id == essay.id }
                             },
-                            onOpen = { essay -> readerEssay = essay },
+                            onOpen = { essay -> readerEssayId = essay.id },
                         )
                     }
                 }
@@ -643,12 +650,15 @@ fun StariaApp(
         )
 
         // ---------- 纸条展开浮层 ----------
-        // 放在根布局最外层，才能压暗并覆盖顶栏与底栏
+        // 放在根布局最外层，才能压暗并覆盖顶栏与底栏。
+        // 按 id 从 paperNotes 现取，编辑保存后浮层内容跟着更新；
+        // 该条被删除（id 查不到）时自然不再展示。
+        val expandedNote = expandedNoteId?.let { id -> paperNotes.firstOrNull { it.id == id } }
         expandedNote?.let { note ->
             ExpandedNoteOverlay(
                 note = note,
                 onDismiss = {
-                    expandedNote = null
+                    expandedNoteId = null
                     selection.setOverlay(false)
                 },
             )
@@ -674,18 +684,22 @@ fun StariaApp(
 
         // ---------- 随笔查看页（二级全屏，从右侧滑入/滑出） ----------
         // 覆盖在最上层，底栏与头像被完全遮住
-        // 用 rememberLastNonNull：退出动画期间 content 仍拿到最后一次非 null 内容，
-        // 否则 readerEssay 置 null 的瞬间内容变空，滑出动画不可见。
+        //
+        // 内容按 id 从 essays 现取，而不是缓存对象：
+        // 这样在编辑页保存后，查看页再进来读到的就是最新内容。
+        // 打开期间被删除的话（id 查不到）视为已关闭，避免空白页卡住。
+        val readerEssay = readerEssayId?.let { id -> essays.firstOrNull { it.id == id } }
+        // 退出动画期间 readerEssayId 已置 null，需要保留最后一份内容来画。
         val lastReaderEssay = rememberLastNonNull(readerEssay)
-        SlideScreen(visible = readerEssay != null, direction = SlideDirection.FromRight) {
+        SlideScreen(visible = readerEssayId != null, direction = SlideDirection.FromRight) {
             val essay = lastReaderEssay.update(readerEssay)
             if (essay != null) {
                 EssayReaderPage(
                     essay = essay,
-                    onBack = { readerEssay = null },
+                    onBack = { readerEssayId = null },
                     onEdit = {
                         // 从查看页进入编辑：先收起查看页，编辑保存后回到列表
-                        readerEssay = null
+                        readerEssayId = null
                         editDraft = EditDraft(
                             kind = EditKind.Essay,
                             id = essay.id,
@@ -697,7 +711,7 @@ fun StariaApp(
                     onDelete = {
                         trash = trash + essay.toTrash()
                         essays = essays.filterNot { it.id == essay.id }
-                        readerEssay = null
+                        readerEssayId = null
                     },
                 )
             }
@@ -727,10 +741,13 @@ fun StariaApp(
 
         // ---------- 编辑页（二级全屏，从右侧滑入/滑出） ----------
         // 声明在最后，压在查看页之上：从随笔查看页点编辑能直接进入
-        // 用 rememberLastNonNull：退出动画期间 content 仍拿到最后一次非 null 草稿。
-        val lastDraft = rememberLastNonNull(editDraft)
+        //
+        // 这里不能用 rememberLastNonNull 缓存草稿：
+        // 草稿是「打开编辑页那一刻的快照」，缓存后即便列表更新，
+        // 再次进入编辑页仍会拿到旧内容。改为正常读取 editDraft，
+        // 退出动画需要的最后一份内容由 EditorScreen 内部保留。
+        val draft = editDraft
         SlideScreen(visible = editDraft != null, direction = SlideDirection.FromRight) {
-            val draft = lastDraft.update(editDraft)
             if (draft != null) {
                 EditorScreen(
                     initial = draft,
